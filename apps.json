@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Blink LED",
+    "id": "blink",
+    "category": "utilities",
+    "description": "Simple LED blinking example to test your WebScreen setup",
+    "icon": "fa-lightbulb",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/blink",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/blink/main.js",
+    "size": 1,
+    "featured": true
+  },
+  {
+    "name": "Time API",
+    "id": "timeapi_app",
+    "category": "productivity",
+    "description": "Display current time and date from world time API",
+    "icon": "fa-clock",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi_app",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timeapi_app/main.js",
+    "size": 2,
+    "featured": true
+  },
+  {
+    "name": "SD Card Reader",
+    "id": "sd_reader",
+    "category": "utilities",
+    "description": "Read and display files from your SD card storage",
+    "icon": "fa-sd-card",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/sd_reader",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/sd_reader/main.js",
+    "size": 1,
+    "featured": false
+  },
+  {
+    "name": "Weather Display",
+    "id": "weather_app",
+    "category": "productivity",
+    "description": "Show current weather conditions and forecast",
+    "icon": "fa-cloud-sun",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/weather",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/weather/main.js",
+    "size": 3,
+    "featured": true
+  },
+  {
+    "name": "Digital Clock",
+    "id": "digital_clock",
+    "category": "utilities",
+    "description": "Beautiful digital clock with customizable themes",
+    "icon": "fa-clock",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/clock",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/clock/main.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "System Monitor",
+    "id": "system_monitor",
+    "category": "utilities",
+    "description": "Monitor system performance and resource usage",
+    "icon": "fa-chart-line",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/monitor",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/monitor/main.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "Snake Game",
+    "id": "snake_game",
+    "category": "games",
+    "description": "Classic snake game with touch controls",
+    "icon": "fa-gamepad",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/snake",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/games/snake.js",
+    "size": 4,
+    "featured": true
+  },
+  {
+    "name": "Music Player",
+    "id": "music_player",
+    "category": "social",
+    "description": "Control your favorite music streaming services",
+    "icon": "fa-music",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/music",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/music/main.js",
+    "size": 3,
+    "featured": false
+  },
+  {
+    "name": "Notification Center",
+    "id": "notifications",
+    "category": "productivity",
+    "description": "Centralized notification hub for all your services",
+    "icon": "fa-bell",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/notifications",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/notifications/main.js",
+    "size": 3,
+    "featured": true
+  },
+  {
+    "name": "Calculator",
+    "id": "calculator",
+    "category": "utilities",
+    "description": "Simple calculator with basic math operations",
+    "icon": "fa-calculator",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/calculator",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/main.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "Timer & Stopwatch",
+    "id": "timer",
+    "category": "utilities",
+    "description": "Countdown timer and stopwatch for productivity",
+    "icon": "fa-stopwatch",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timer",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timer/main.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "Social Feed",
+    "id": "social_feed",
+    "category": "social",
+    "description": "Display your social media feeds and updates",
+    "icon": "fa-hashtag",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/social",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/main.js",
+    "size": 4,
+    "featured": false
+  }
+]
