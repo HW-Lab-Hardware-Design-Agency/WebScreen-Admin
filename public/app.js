@@ -7,6 +7,17 @@ class WebScreenAdmin {
         this.installedApps = [];
         this.currentPath = '/';
         this.files = [];
+        this.sdCardAvailable = false;
+
+        // Sections that require SD card
+        this.sdRequiredSections = ['files', 'config', 'network'];
+
+        // Terminal
+        this.terminal = null;
+        this.fitAddon = null;
+        this.commandHistory = [];
+        this.historyIndex = -1;
+        this.currentInput = '';
 
         // Bind serial callbacks
         this.serial.onStatusChange = (connected) => this.handleConnectionChange(connected);
@@ -22,6 +33,9 @@ class WebScreenAdmin {
             return;
         }
 
+        // Initialize terminal
+        this.initTerminal();
+
         // Setup event listeners
         this.setupEventListeners();
 
@@ -32,6 +46,155 @@ class WebScreenAdmin {
         this.initializeSections();
     }
 
+    initTerminal() {
+        // Create terminal with custom theme
+        this.terminal = new Terminal({
+            theme: {
+                background: '#0d1117',
+                foreground: '#c9d1d9',
+                cursor: '#58a6ff',
+                cursorAccent: '#0d1117',
+                selectionBackground: '#264f78',
+                black: '#484f58',
+                red: '#ff7b72',
+                green: '#3fb950',
+                yellow: '#d29922',
+                blue: '#58a6ff',
+                magenta: '#bc8cff',
+                cyan: '#39c5cf',
+                white: '#b1bac4',
+                brightBlack: '#6e7681',
+                brightRed: '#ffa198',
+                brightGreen: '#56d364',
+                brightYellow: '#e3b341',
+                brightBlue: '#79c0ff',
+                brightMagenta: '#d2a8ff',
+                brightCyan: '#56d4dd',
+                brightWhite: '#f0f6fc'
+            },
+            fontFamily: '"Cascadia Code", "Fira Code", Menlo, Monaco, "Courier New", monospace',
+            fontSize: 13,
+            lineHeight: 1.4,
+            cursorBlink: true,
+            cursorStyle: 'bar',
+            scrollback: 1000,
+            convertEol: true
+        });
+
+        // Fit addon to auto-resize terminal
+        this.fitAddon = new FitAddon.FitAddon();
+        this.terminal.loadAddon(this.fitAddon);
+
+        // Open terminal in container
+        const terminalContainer = document.getElementById('terminal');
+        if (terminalContainer) {
+            this.terminal.open(terminalContainer);
+
+            // Delay fit to allow CSS padding to be applied
+            setTimeout(() => {
+                this.fitAddon.fit();
+            }, 50);
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                setTimeout(() => this.fitAddon.fit(), 10);
+            });
+
+            // Write welcome message
+            this.writeToTerminal('\x1b[1;36m╔══════════════════════════════════════╗\x1b[0m\r\n');
+            this.writeToTerminal('\x1b[1;36m║\x1b[0m   \x1b[1;37mWebScreen Serial Console\x1b[0m          \x1b[1;36m║\x1b[0m\r\n');
+            this.writeToTerminal('\x1b[1;36m╚══════════════════════════════════════╝\x1b[0m\r\n\r\n');
+            this.writeToTerminal('\x1b[33mConnect to a device to start...\x1b[0m\r\n\r\n');
+
+            // Handle terminal input
+            this.terminal.onData((data) => this.handleTerminalInput(data));
+        }
+    }
+
+    handleTerminalInput(data) {
+        if (!this.serial.connected) {
+            return;
+        }
+
+        // Handle special keys
+        switch (data) {
+            case '\r': // Enter
+                this.terminal.write('\r\n');
+                if (this.currentInput.trim()) {
+                    this.commandHistory.push(this.currentInput);
+                    this.historyIndex = this.commandHistory.length;
+                    this.sendTerminalCommand(this.currentInput);
+                }
+                this.currentInput = '';
+                this.writePrompt();
+                break;
+
+            case '\x7f': // Backspace
+                if (this.currentInput.length > 0) {
+                    this.currentInput = this.currentInput.slice(0, -1);
+                    this.terminal.write('\b \b');
+                }
+                break;
+
+            case '\x1b[A': // Up arrow
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    this.replaceInput(this.commandHistory[this.historyIndex]);
+                }
+                break;
+
+            case '\x1b[B': // Down arrow
+                if (this.historyIndex < this.commandHistory.length - 1) {
+                    this.historyIndex++;
+                    this.replaceInput(this.commandHistory[this.historyIndex]);
+                } else {
+                    this.historyIndex = this.commandHistory.length;
+                    this.replaceInput('');
+                }
+                break;
+
+            case '\x03': // Ctrl+C
+                this.terminal.write('^C\r\n');
+                this.currentInput = '';
+                this.writePrompt();
+                break;
+
+            default:
+                // Regular character input
+                if (data >= ' ' || data === '\t') {
+                    this.currentInput += data;
+                    this.terminal.write(data);
+                }
+        }
+    }
+
+    replaceInput(newInput) {
+        // Clear current input from terminal
+        const clearLength = this.currentInput.length;
+        this.terminal.write('\b'.repeat(clearLength) + ' '.repeat(clearLength) + '\b'.repeat(clearLength));
+        // Write new input
+        this.currentInput = newInput;
+        this.terminal.write(newInput);
+    }
+
+    writePrompt() {
+        this.terminal.write('\x1b[1;32mWebScreen\x1b[0m\x1b[1;37m>\x1b[0m ');
+    }
+
+    writeToTerminal(text) {
+        if (this.terminal) {
+            this.terminal.write(text);
+        }
+    }
+
+    async sendTerminalCommand(command) {
+        try {
+            await this.serial.sendCommand(command);
+        } catch (error) {
+            this.writeToTerminal(`\x1b[31mError: ${error.message}\x1b[0m\r\n`);
+        }
+    }
+
     setupEventListeners() {
         // Connection button
         document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
@@ -40,6 +203,13 @@ class WebScreenAdmin {
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', () => {
                 const section = item.dataset.section;
+
+                // Check if section requires SD card
+                if (this.sdRequiredSections.includes(section) && !this.sdCardAvailable) {
+                    this.showToast('SD card required for this section', 'warning');
+                    return;
+                }
+
                 this.switchSection(section);
             });
         });
@@ -48,11 +218,10 @@ class WebScreenAdmin {
         document.getElementById('rebootBtn')?.addEventListener('click', () => this.rebootDevice());
         document.getElementById('backupBtn')?.addEventListener('click', () => this.backupConfig());
         document.getElementById('factoryResetBtn')?.addEventListener('click', () => this.factoryReset());
-        document.getElementById('updateBtn')?.addEventListener('click', () => this.checkUpdates());
+        document.getElementById('refreshInfoBtn')?.addEventListener('click', () => this.refreshDeviceInfo());
 
-        // App controls
-        document.getElementById('stopAppBtn')?.addEventListener('click', () => this.stopCurrentApp());
-        document.getElementById('restartAppBtn')?.addEventListener('click', () => this.restartCurrentApp());
+        // Serial Console
+        document.getElementById('clearConsoleBtn')?.addEventListener('click', () => this.clearTerminal());
 
         // Marketplace
         document.querySelectorAll('.category-btn').forEach(btn => {
@@ -87,11 +256,6 @@ class WebScreenAdmin {
             }
         });
 
-        // Display settings
-        document.getElementById('brightness')?.addEventListener('input', (e) => {
-            document.getElementById('brightnessValue').textContent = e.target.value;
-        });
-        document.getElementById('saveDisplayBtn')?.addEventListener('click', () => this.saveDisplaySettings());
 
         // Modal
         document.getElementById('closeModal')?.addEventListener('click', () => this.closeModal());
@@ -154,10 +318,27 @@ class WebScreenAdmin {
             indicator.classList.add('connected');
             statusText.textContent = 'Connected';
             this.showToast('Connected to WebScreen', 'success');
+
+            // Show connected message in terminal
+            this.writeToTerminal('\x1b[1;32m✓ Connected to WebScreen\x1b[0m\r\n');
+            this.writeToTerminal('\x1b[90mType /help for available commands\x1b[0m\r\n\r\n');
+            this.writePrompt();
         } else {
             btn.innerHTML = '<i class="fas fa-plug"></i> Connect Device';
             indicator.classList.remove('connected');
             statusText.textContent = 'Disconnected';
+
+            // Reset SD card status when disconnected
+            this.sdCardAvailable = false;
+            this.updateSDCardDependentSections();
+
+            // Show disconnected message in terminal
+            this.writeToTerminal('\r\n\x1b[1;31m✗ Disconnected\x1b[0m\r\n');
+            this.writeToTerminal('\x1b[33mConnect to a device to continue...\x1b[0m\r\n\r\n');
+
+            // Reset terminal input state
+            this.currentInput = '';
+            this.historyIndex = this.commandHistory.length;
         }
 
         // Enable/disable controls based on connection
@@ -166,6 +347,23 @@ class WebScreenAdmin {
 
     handleSerialData(data) {
         console.log('Serial data:', data);
+        // Display in terminal - handle multiline data properly
+        if (this.terminal) {
+            // Convert newlines and write to terminal
+            const formattedData = data.replace(/\n/g, '\r\n');
+            this.terminal.write(formattedData + '\r\n');
+        }
+    }
+
+    clearTerminal() {
+        if (this.terminal) {
+            this.terminal.clear();
+            this.writeToTerminal('\x1b[2J\x1b[H'); // Clear screen and move cursor home
+            this.writeToTerminal('\x1b[90mConsole cleared\x1b[0m\r\n\r\n');
+            if (this.serial.connected) {
+                this.writePrompt();
+            }
+        }
     }
 
     updateControlsState(enabled) {
@@ -203,13 +401,37 @@ class WebScreenAdmin {
                 document.getElementById('deviceWifi').textContent = stats.wifi || '-';
                 document.getElementById('deviceIP').textContent = stats.ip || '-';
                 document.getElementById('deviceUptime').textContent = stats.uptime || '-';
+
+                // Check SD card availability
+                this.sdCardAvailable = stats.sdCard && !stats.sdCard.toLowerCase().includes('not mounted');
+                this.updateSDCardDependentSections();
             }
 
-            // Load files
-            await this.refreshFiles();
+            // Load files only if SD card is available
+            if (this.sdCardAvailable) {
+                await this.refreshFiles();
+            }
         } catch (error) {
             console.error('Failed to load device info:', error);
         }
+    }
+
+    updateSDCardDependentSections() {
+        // Update nav items that require SD card
+        this.sdRequiredSections.forEach(section => {
+            const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+            if (navItem) {
+                if (this.sdCardAvailable) {
+                    navItem.classList.remove('disabled');
+                    navItem.style.opacity = '1';
+                    navItem.style.pointerEvents = 'auto';
+                } else {
+                    navItem.classList.add('disabled');
+                    navItem.style.opacity = '0.4';
+                    navItem.style.pointerEvents = 'auto'; // Keep clickable to show warning
+                }
+            }
+        });
     }
 
     switchSection(section) {
@@ -290,12 +512,15 @@ class WebScreenAdmin {
         }
     }
 
-    async checkUpdates() {
-        this.showToast('Checking for updates...', 'info');
-        // TODO: Implement update check
-        setTimeout(() => {
-            this.showToast('Your device is up to date', 'success');
-        }, 2000);
+    async refreshDeviceInfo() {
+        if (!this.serial.connected) {
+            this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        this.showToast('Refreshing device info...', 'info');
+        await this.loadDeviceInfo();
+        this.showToast('Device info refreshed', 'success');
     }
 
     // Marketplace functions
@@ -679,40 +904,10 @@ class WebScreenAdmin {
 
             this.showToast(`${app.name} installed successfully!`, 'success');
             this.closeModal();
-
-            // Update current app display
-            this.updateCurrentApp(app);
         } catch (error) {
             console.error('Failed to install app:', error);
             this.showToast('Failed to install app', 'error');
         }
-    }
-
-    updateCurrentApp(app) {
-        document.getElementById('currentAppName').textContent = app.name;
-        document.getElementById('currentAppDesc').textContent = app.description;
-        document.getElementById('stopAppBtn').disabled = false;
-        document.getElementById('restartAppBtn').disabled = false;
-    }
-
-    async stopCurrentApp() {
-        if (!this.serial.connected) return;
-
-        try {
-            await this.serial.sendCommand('/stop');
-            document.getElementById('currentAppName').textContent = 'No App Running';
-            document.getElementById('currentAppDesc').textContent = 'Select an app from the Marketplace to get started';
-            document.getElementById('stopAppBtn').disabled = true;
-            document.getElementById('restartAppBtn').disabled = true;
-            this.showToast('App stopped', 'success');
-        } catch (error) {
-            this.showToast('Failed to stop app', 'error');
-        }
-    }
-
-    async restartCurrentApp() {
-        // TODO: Implement app restart
-        this.showToast('Restarting app...', 'info');
     }
 
     // File Manager functions
@@ -909,40 +1104,6 @@ class WebScreenAdmin {
         } catch (error) {
             this.showToast('Failed to configure WiFi', 'error');
         }
-    }
-
-    // Display functions
-    async saveDisplaySettings() {
-        if (!this.serial.connected) {
-            this.showToast('Please connect to a device first', 'warning');
-            return;
-        }
-
-        try {
-            const brightness = document.getElementById('brightness').value;
-            const orientation = document.getElementById('orientation').value;
-            const timeout = document.getElementById('timeout').value;
-
-            await this.serial.setBrightness(brightness);
-            await this.serial.setOrientation(orientation);
-            await this.serial.setTimeout(timeout);
-
-            this.showToast('Display settings saved', 'success');
-
-            // Update preview
-            this.updateDisplayPreview();
-        } catch (error) {
-            this.showToast('Failed to save display settings', 'error');
-        }
-    }
-
-    updateDisplayPreview() {
-        const orientation = document.getElementById('orientation').value;
-        const brightness = document.getElementById('brightness').value;
-        const preview = document.getElementById('previewScreen');
-
-        preview.style.transform = `rotate(${orientation}deg)`;
-        preview.style.opacity = brightness / 255;
     }
 
     // Toast notifications

@@ -374,44 +374,82 @@ body {
     font-weight: 500;
 }
 
-/* Current App */
-.current-app {
+/* Serial Console */
+.console-card {
     display: flex;
-    align-items: center;
-    gap: 2rem;
+    flex-direction: column;
 }
 
-.app-preview {
-    width: 100px;
-    height: 100px;
-    border-radius: 12px;
-    overflow: hidden;
+.console-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.console-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.console-action-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.console-action-btn:hover {
     background: var(--bg-color);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: var(--primary-color);
+    border-color: var(--primary-color);
 }
 
-.app-preview img {
+.console-body {
+    padding: 0 !important;
+    overflow: hidden;
+    border-radius: 0 0 12px 12px;
+}
+
+.terminal-wrapper {
+    background: #0d1117;
+    height: 250px;
+    padding: 10px 12px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+#terminal {
     width: 100%;
     height: 100%;
-    object-fit: cover;
 }
 
-.app-info h4 {
-    font-size: 1.25rem;
-    margin-bottom: 0.5rem;
+#terminal .xterm-screen canvas {
+    transform: translate(4px, 4px);
 }
 
-.app-info p {
-    color: var(--text-secondary);
-    margin-bottom: 1rem;
-    font-size: 0.875rem;
+#terminal .xterm-viewport {
+    overflow-y: auto !important;
+    padding-left: 4px !important;
 }
 
-.app-controls {
-    display: flex;
-    gap: 1rem;
+#terminal .xterm-viewport::-webkit-scrollbar {
+    width: 8px;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-track {
+    background: #161b22;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 4px;
+}
+
+#terminal .xterm-viewport::-webkit-scrollbar-thumb:hover {
+    background: #484f58;
 }
 
 /* Marketplace */
