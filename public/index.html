@@ -64,6 +64,11 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+    <!-- xterm.js Terminal -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
 
@@ -153,10 +158,6 @@
                     <div class="nav-item" data-section="network">
                         <i class="fas fa-wifi"></i>
                         <span>Network</span>
-                    </div>
-                    <div class="nav-item" data-section="display">
-                        <i class="fas fa-tv"></i>
-                        <span>Display</span>
                     </div>
                 </nav>
             </aside>
@@ -277,36 +278,27 @@
                                         <i class="fas fa-eraser"></i>
                                         <span>Factory Reset</span>
                                     </button>
-                                    <button class="action-btn" id="updateBtn">
+                                    <button class="action-btn" id="refreshInfoBtn">
                                         <i class="fas fa-sync"></i>
-                                        <span>Check Updates</span>
+                                        <span>Refresh Info</span>
                                     </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Current App Card -->
-                        <div class="card full-width">
+                        <!-- Serial Console Card -->
+                        <div class="card console-card">
                             <div class="card-header">
-                                <h3><i class="fas fa-play-circle"></i> Currently Running</h3>
+                                <h3><i class="fas fa-terminal"></i> Serial Console</h3>
+                                <div class="console-actions">
+                                    <button class="console-action-btn" id="clearConsoleBtn" title="Clear console">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <div class="current-app">
-                                    <div class="app-preview">
-                                        <img id="currentAppIcon" src="assets/placeholder-app.png" alt="App Icon">
-                                    </div>
-                                    <div class="app-info">
-                                        <h4 id="currentAppName">No App Running</h4>
-                                        <p id="currentAppDesc">Select an app from the Marketplace to get started</p>
-                                        <div class="app-controls">
-                                            <button class="btn btn-secondary" id="stopAppBtn" disabled>
-                                                <i class="fas fa-stop"></i> Stop
-                                            </button>
-                                            <button class="btn btn-secondary" id="restartAppBtn" disabled>
-                                                <i class="fas fa-redo"></i> Restart
-                                            </button>
-                                        </div>
-                                    </div>
+                            <div class="card-body console-body">
+                                <div class="terminal-wrapper">
+                                    <div id="terminal"></div>
                                 </div>
                             </div>
                         </div>
@@ -474,63 +466,6 @@
                     </div>
                 </section>
 
-                <!-- Display Section -->
-                <section id="display" class="section">
-                    <h2 class="section-title">Display Settings</h2>
-
-                    <div class="display-container">
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-tv"></i> Screen Configuration</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-group">
-                                    <label for="brightness">Brightness</label>
-                                    <div class="slider-container">
-                                        <input type="range" id="brightness" class="slider" min="0" max="255" value="128">
-                                        <span class="slider-value" id="brightnessValue">128</span>
-                                    </div>
-                                </div>
-                                <div class="form-group">
-                                    <label for="orientation">Screen Orientation</label>
-                                    <select id="orientation" class="form-control">
-                                        <option value="0">Normal (0°)</option>
-                                        <option value="90">Rotate 90°</option>
-                                        <option value="180">Rotate 180°</option>
-                                        <option value="270">Rotate 270°</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="timeout">Screen Timeout</label>
-                                    <select id="timeout" class="form-control">
-                                        <option value="0">Never</option>
-                                        <option value="30">30 seconds</option>
-                                        <option value="60">1 minute</option>
-                                        <option value="300">5 minutes</option>
-                                        <option value="600">10 minutes</option>
-                                    </select>
-                                </div>
-                                <button class="btn btn-primary" id="saveDisplayBtn">
-                                    <i class="fas fa-save"></i> Save Display Settings
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Preview -->
-                        <div class="card">
-                            <div class="card-header">
-                                <h3><i class="fas fa-eye"></i> Live Preview</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="display-preview">
-                                    <div class="preview-screen" id="previewScreen">
-                                        <span>WebScreen Display</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </div>
         </div>
     </main>
