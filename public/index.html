@@ -176,20 +176,71 @@
                             <div class="card-body">
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <span class="info-label">Model:</span>
+                                        <span class="info-label">Chip Model:</span>
                                         <span class="info-value" id="deviceModel">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Version:</span>
+                                        <span class="info-label">Chip Revision:</span>
+                                        <span class="info-value" id="deviceRevision">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Firmware:</span>
                                         <span class="info-value" id="deviceVersion">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Memory:</span>
+                                        <span class="info-label">SDK Version:</span>
+                                        <span class="info-value" id="deviceSDK">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Flash Size:</span>
+                                        <span class="info-value" id="deviceFlashSize">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Flash Speed:</span>
+                                        <span class="info-value" id="deviceFlashSpeed">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">MAC Address:</span>
+                                        <span class="info-value" id="deviceMAC">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Build Date:</span>
+                                        <span class="info-value" id="deviceBuildDate">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- System Stats Card -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-chart-bar"></i> System Statistics</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">Free Heap:</span>
                                         <span class="info-value" id="deviceMemory">-</span>
                                     </div>
                                     <div class="info-item">
-                                        <span class="info-label">Storage:</span>
+                                        <span class="info-label">Total Heap:</span>
+                                        <span class="info-value" id="deviceTotalHeap">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Free PSRAM:</span>
+                                        <span class="info-value" id="deviceFreePSRAM">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Total PSRAM:</span>
+                                        <span class="info-value" id="deviceTotalPSRAM">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">SD Card:</span>
                                         <span class="info-value" id="deviceStorage">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">CPU Frequency:</span>
+                                        <span class="info-value" id="deviceCPU">-</span>
                                     </div>
                                     <div class="info-item">
                                         <span class="info-label">WiFi:</span>
@@ -198,6 +249,10 @@
                                     <div class="info-item">
                                         <span class="info-label">IP Address:</span>
                                         <span class="info-value" id="deviceIP">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Uptime:</span>
+                                        <span class="info-value" id="deviceUptime">-</span>
                                     </div>
                                 </div>
                             </div>

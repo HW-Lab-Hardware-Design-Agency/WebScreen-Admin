@@ -7,6 +7,7 @@ class WebScreenSerial {
         this.connected = false;
         this.buffer = '';
         this.callbacks = new Map();
+        this.activeCollectors = new Map(); // For multi-line response collection
         this.onStatusChange = null;
         this.onDataReceived = null;
     }
@@ -85,7 +86,7 @@ class WebScreenSerial {
                 const { value, done } = await this.reader.read();
                 if (done) break;
 
-                const text = decoder.decode(value);
+                const text = decoder.decode(value, { stream: true });
                 this.buffer += text;
 
                 // Process complete lines
@@ -93,8 +94,9 @@ class WebScreenSerial {
                 this.buffer = lines.pop() || '';
 
                 for (const line of lines) {
-                    if (line.trim()) {
-                        this.processLine(line.trim());
+                    const trimmedLine = line.replace('\r', '').trim();
+                    if (trimmedLine) {
+                        this.processLine(trimmedLine);
                     }
                 }
             }
@@ -110,7 +112,12 @@ class WebScreenSerial {
             this.onDataReceived(line);
         }
 
-        // Check for callbacks
+        // Process active collectors (multi-line response handlers)
+        for (const [id, collector] of this.activeCollectors) {
+            collector(line);
+        }
+
+        // Check for one-time pattern callbacks
         for (const [pattern, callback] of this.callbacks) {
             if (line.includes(pattern)) {
                 callback(line);
@@ -138,20 +145,48 @@ class WebScreenSerial {
     // High-level commands
     async getDeviceInfo() {
         return new Promise((resolve) => {
-            const callback = (line) => {
-                if (line.includes('Device:')) {
-                    const info = this.parseDeviceInfo(line);
-                    this.callbacks.delete('Device:');
-                    resolve(info);
+            let info = {};
+            let collecting = false;
+            const collectorId = 'info_' + Date.now();
+
+            const collector = (line) => {
+                if (line.includes('=== Device Information ===')) {
+                    collecting = true;
+                } else if (collecting) {
+                    if (line.includes('Chip Model:')) {
+                        info.chipModel = line.split(':')[1].trim();
+                    } else if (line.includes('Chip Revision:')) {
+                        info.chipRevision = line.split(':')[1].trim();
+                    } else if (line.includes('Flash Size:')) {
+                        info.flashSize = line.split(':')[1].trim();
+                    } else if (line.includes('Flash Speed:')) {
+                        info.flashSpeed = line.split(':')[1].trim();
+                    } else if (line.includes('MAC Address:')) {
+                        info.macAddress = line.split(':').slice(1).join(':').trim();
+                    } else if (line.includes('SDK Version:')) {
+                        info.sdkVersion = line.split(':')[1].trim();
+                    } else if (line.includes('WebScreen Version:')) {
+                        info.firmwareVersion = line.split(':')[1].trim();
+                    } else if (line.includes('Build Date:')) {
+                        info.buildDate = line.split(':').slice(1).join(':').trim();
+                        // Build Date is the last info line
+                        this.activeCollectors.delete(collectorId);
+                        resolve(info);
+                    }
                 }
             };
-            this.callbacks.set('Device:', callback);
+
+            this.activeCollectors.set(collectorId, collector);
             this.sendCommand('/info');
 
             // Timeout after 5 seconds
             setTimeout(() => {
-                this.callbacks.delete('Device:');
-                resolve(null);
+                this.activeCollectors.delete(collectorId);
+                if (Object.keys(info).length > 0) {
+                    resolve(info);
+                } else {
+                    resolve(null);
+                }
             }, 5000);
         });
     }
@@ -160,8 +195,9 @@ class WebScreenSerial {
         return new Promise((resolve) => {
             let stats = {};
             let collecting = false;
+            const collectorId = 'stats_' + Date.now();
 
-            const callback = (line) => {
+            const collector = (line) => {
                 if (line.includes('=== System Statistics ===')) {
                     collecting = true;
                 } else if (collecting) {
@@ -171,29 +207,36 @@ class WebScreenSerial {
                         stats.totalHeap = line.split(':')[1].trim();
                     } else if (line.includes('Free PSRAM:')) {
                         stats.freePSRAM = line.split(':')[1].trim();
-                    } else if (line.includes('SD Card Size:')) {
-                        stats.sdSize = line.split(':')[1].trim();
-                    } else if (line.includes('SD Card Free:')) {
-                        stats.sdFree = line.split(':')[1].trim();
+                    } else if (line.includes('Total PSRAM:')) {
+                        stats.totalPSRAM = line.split(':')[1].trim();
+                    } else if (line.includes('SD Card:')) {
+                        stats.sdCard = line.split(':')[1].trim();
                     } else if (line.includes('WiFi:')) {
                         stats.wifi = line.split(':')[1].trim();
                     } else if (line.includes('IP Address:')) {
                         stats.ip = line.split(':')[1].trim();
-                        // This is typically the last stat
-                        this.callbacks.delete('=== System Statistics ===');
+                    } else if (line.includes('Uptime:')) {
+                        stats.uptime = line.split(':')[1].trim();
+                    } else if (line.includes('CPU Frequency:')) {
+                        stats.cpuFrequency = line.split(':')[1].trim();
+                        // CPU Frequency is the last stat, finish collecting
+                        this.activeCollectors.delete(collectorId);
                         resolve(stats);
-                        collecting = false;
                     }
                 }
             };
 
-            this.callbacks.set('=== System Statistics ===', callback);
+            this.activeCollectors.set(collectorId, collector);
             this.sendCommand('/stats');
 
             // Timeout after 5 seconds
             setTimeout(() => {
-                this.callbacks.delete('=== System Statistics ===');
-                resolve(stats);
+                this.activeCollectors.delete(collectorId);
+                if (Object.keys(stats).length > 0) {
+                    resolve(stats);
+                } else {
+                    resolve(null);
+                }
             }, 5000);
         });
     }
@@ -202,8 +245,9 @@ class WebScreenSerial {
         return new Promise((resolve) => {
             const files = [];
             let collecting = false;
+            const collectorId = 'files_' + Date.now();
 
-            const callback = (line) => {
+            const collector = (line) => {
                 if (line.includes('Directory listing')) {
                     collecting = true;
                 } else if (collecting && line.startsWith('[')) {
@@ -217,18 +261,17 @@ class WebScreenSerial {
                         });
                     }
                 } else if (collecting && line.includes('Total:')) {
-                    this.callbacks.delete('Directory listing');
+                    this.activeCollectors.delete(collectorId);
                     resolve(files);
-                    collecting = false;
                 }
             };
 
-            this.callbacks.set('Directory listing', callback);
+            this.activeCollectors.set(collectorId, collector);
             this.sendCommand(`/ls ${path}`);
 
             // Timeout after 5 seconds
             setTimeout(() => {
-                this.callbacks.delete('Directory listing');
+                this.activeCollectors.delete(collectorId);
                 resolve(files);
             }, 5000);
         });
@@ -278,25 +321,25 @@ class WebScreenSerial {
         return new Promise((resolve) => {
             let backupData = '';
             let collecting = false;
+            const collectorId = 'backup_' + Date.now();
 
-            const callback = (line) => {
+            const collector = (line) => {
                 if (line.includes('=== BACKUP START ===')) {
                     collecting = true;
                 } else if (line.includes('=== BACKUP END ===')) {
-                    this.callbacks.delete('=== BACKUP');
+                    this.activeCollectors.delete(collectorId);
                     resolve(backupData);
-                    collecting = false;
                 } else if (collecting) {
                     backupData += line + '\n';
                 }
             };
 
-            this.callbacks.set('=== BACKUP', callback);
+            this.activeCollectors.set(collectorId, collector);
             this.sendCommand('/backup');
 
             // Timeout after 10 seconds
             setTimeout(() => {
-                this.callbacks.delete('=== BACKUP');
+                this.activeCollectors.delete(collectorId);
                 resolve(backupData);
             }, 10000);
         });

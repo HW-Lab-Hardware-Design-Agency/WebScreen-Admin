@@ -178,12 +178,31 @@ class WebScreenAdmin {
 
     async loadDeviceInfo() {
         try {
+            // Get device information (chip model, firmware version, etc.)
+            const info = await this.serial.getDeviceInfo();
+            if (info) {
+                document.getElementById('deviceModel').textContent = info.chipModel || '-';
+                document.getElementById('deviceRevision').textContent = info.chipRevision || '-';
+                document.getElementById('deviceVersion').textContent = info.firmwareVersion || '-';
+                document.getElementById('deviceSDK').textContent = info.sdkVersion || '-';
+                document.getElementById('deviceFlashSize').textContent = info.flashSize || '-';
+                document.getElementById('deviceFlashSpeed').textContent = info.flashSpeed || '-';
+                document.getElementById('deviceMAC').textContent = info.macAddress || '-';
+                document.getElementById('deviceBuildDate').textContent = info.buildDate || '-';
+            }
+
+            // Get system statistics (memory, storage, WiFi, etc.)
             const stats = await this.serial.getStats();
             if (stats) {
                 document.getElementById('deviceMemory').textContent = stats.freeHeap || '-';
-                document.getElementById('deviceStorage').textContent = stats.sdFree || '-';
+                document.getElementById('deviceTotalHeap').textContent = stats.totalHeap || '-';
+                document.getElementById('deviceFreePSRAM').textContent = stats.freePSRAM || '-';
+                document.getElementById('deviceTotalPSRAM').textContent = stats.totalPSRAM || '-';
+                document.getElementById('deviceStorage').textContent = stats.sdCard || '-';
+                document.getElementById('deviceCPU').textContent = stats.cpuFrequency || '-';
                 document.getElementById('deviceWifi').textContent = stats.wifi || '-';
                 document.getElementById('deviceIP').textContent = stats.ip || '-';
+                document.getElementById('deviceUptime').textContent = stats.uptime || '-';
             }
 
             // Load files
@@ -491,6 +510,17 @@ class WebScreenAdmin {
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/social",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/main.js",
                     "size": 4,
+                    "featured": false
+                },
+                {
+                    "name": "Calculator",
+                    "id": "calculator",
+                    "category": "utilities",
+                    "description": "Basic calculator with arithmetic operations",
+                    "icon": "fa-calculator",
+                    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/calculator",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/calculator_app.js",
+                    "size": 2,
                     "featured": false
                 }
             ];
