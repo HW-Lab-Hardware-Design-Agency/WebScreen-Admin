@@ -8,6 +8,7 @@ class WebScreenAdmin {
         this.currentPath = '/';
         this.files = [];
         this.sdCardAvailable = false;
+        this.currentConfig = null;
 
         // Sections that require SD card
         this.sdRequiredSections = ['files', 'config', 'network'];
@@ -407,12 +408,48 @@ class WebScreenAdmin {
                 this.updateSDCardDependentSections();
             }
 
-            // Load files only if SD card is available
+            // Load files and config only if SD card is available
             if (this.sdCardAvailable) {
                 await this.refreshFiles();
+                // Load current webscreen.json config and populate form fields
+                await this.loadCurrentConfig();
+                // Populate auto-start dropdown with installed apps
+                await this.populateAutoStartDropdown();
             }
         } catch (error) {
             console.error('Failed to load device info:', error);
+        }
+    }
+
+    // Populate auto-start dropdown with JS files from SD card
+    async populateAutoStartDropdown() {
+        const autoStartSelect = document.getElementById('autoStart');
+        if (!autoStartSelect) return;
+
+        // Keep the "None" option
+        const noneOption = autoStartSelect.querySelector('option[value=""]');
+        autoStartSelect.innerHTML = '';
+        if (noneOption) {
+            autoStartSelect.appendChild(noneOption);
+        } else {
+            const none = document.createElement('option');
+            none.value = '';
+            none.textContent = 'None';
+            autoStartSelect.appendChild(none);
+        }
+
+        // Add JS files from the file list
+        for (const file of this.files) {
+            if (file.type === 'file' && file.name.endsWith('.js')) {
+                const option = document.createElement('option');
+                option.value = file.name;
+                option.textContent = file.name;
+                // Select if this is the current script
+                if (this.currentConfig?.script === file.name) {
+                    option.selected = true;
+                }
+                autoStartSelect.appendChild(option);
+            }
         }
     }
 
@@ -535,18 +572,18 @@ class WebScreenAdmin {
                     "description": "Simple LED blinking example to test your WebScreen setup",
                     "icon": "fa-lightbulb",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/blink",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/blink/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/blink/script.js",
                     "size": 1,
                     "featured": true
                 },
                 {
                     "name": "Time API",
-                    "id": "timeapi_app",
+                    "id": "timeapi",
                     "category": "productivity",
                     "description": "Display current time and date from world time API",
                     "icon": "fa-clock",
-                    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi_app",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timeapi_app/main.js",
+                    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timeapi/script.js",
                     "size": 2,
                     "featured": true
                 },
@@ -557,7 +594,7 @@ class WebScreenAdmin {
                     "description": "Read and display files from your SD card storage",
                     "icon": "fa-sd-card",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/sd_reader",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/sd_reader/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/sd_reader/script.js",
                     "size": 1,
                     "featured": false
                 },
@@ -568,7 +605,7 @@ class WebScreenAdmin {
                     "description": "Show current weather conditions and forecast",
                     "icon": "fa-cloud-sun",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/weather",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/weather/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/weather/script.js",
                     "size": 3,
                     "featured": true
                 },
@@ -579,7 +616,7 @@ class WebScreenAdmin {
                     "description": "Beautiful digital clock with customizable themes",
                     "icon": "fa-clock",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/clock",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/clock/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/clock/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -590,7 +627,7 @@ class WebScreenAdmin {
                     "description": "Monitor system performance and resource usage",
                     "icon": "fa-chart-line",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/monitor",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/monitor/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/monitor/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -601,7 +638,7 @@ class WebScreenAdmin {
                     "description": "Classic snake game with touch controls",
                     "icon": "fa-gamepad",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/snake",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/games/snake.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/snake/script.js",
                     "size": 4,
                     "featured": true
                 },
@@ -612,7 +649,7 @@ class WebScreenAdmin {
                     "description": "Control your favorite music streaming services",
                     "icon": "fa-music",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/music",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/music/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/music/script.js",
                     "size": 3,
                     "featured": false
                 },
@@ -623,7 +660,7 @@ class WebScreenAdmin {
                     "description": "Centralized notification hub for all your services",
                     "icon": "fa-bell",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/notifications",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/notifications/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/notifications/script.js",
                     "size": 3,
                     "featured": true
                 },
@@ -634,7 +671,7 @@ class WebScreenAdmin {
                     "description": "Scrolling text display for presentations and speeches",
                     "icon": "fa-scroll",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/teleprompter",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/teleprompter/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/teleprompter/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -645,7 +682,7 @@ class WebScreenAdmin {
                     "description": "Display Steam profile, friends online, and game activity",
                     "icon": "fa-steam",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/steam",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/steam/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/steam/script.js",
                     "size": 3,
                     "featured": true
                 },
@@ -656,7 +693,7 @@ class WebScreenAdmin {
                     "description": "Real-time stock prices and market information",
                     "icon": "fa-chart-line",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/stocks",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/stocks/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/stocks/script.js",
                     "size": 3,
                     "featured": true
                 },
@@ -667,7 +704,7 @@ class WebScreenAdmin {
                     "description": "Focus timer with work and break intervals for productivity",
                     "icon": "fa-p",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/pomodoro",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/pomodoro/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/pomodoro/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -678,7 +715,7 @@ class WebScreenAdmin {
                     "description": "Display latest news and updates from RSS feeds",
                     "icon": "fa-rss",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/rss",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/rss/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/rss/script.js",
                     "size": 3,
                     "featured": false
                 },
@@ -689,7 +726,7 @@ class WebScreenAdmin {
                     "description": "Monitor and control IoT devices and sensors",
                     "icon": "fa-microchip",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/iot",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/iot/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/iot/script.js",
                     "size": 4,
                     "featured": true
                 },
@@ -700,7 +737,7 @@ class WebScreenAdmin {
                     "description": "Track auction bids and marketplace listings",
                     "icon": "fa-gavel",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/auctions",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/auctions/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/auctions/script.js",
                     "size": 3,
                     "featured": false
                 },
@@ -711,7 +748,7 @@ class WebScreenAdmin {
                     "description": "Personal reminder system with notifications and alerts",
                     "icon": "fa-calendar-days",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/reminders",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/reminders/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/reminders/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -722,7 +759,7 @@ class WebScreenAdmin {
                     "description": "Countdown timer and stopwatch for productivity",
                     "icon": "fa-stopwatch",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timer",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timer/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timer/script.js",
                     "size": 2,
                     "featured": false
                 },
@@ -733,7 +770,7 @@ class WebScreenAdmin {
                     "description": "Display your social media feeds and updates",
                     "icon": "fa-hashtag",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/social",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/main.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/script.js",
                     "size": 4,
                     "featured": false
                 },
@@ -744,9 +781,20 @@ class WebScreenAdmin {
                     "description": "Basic calculator with arithmetic operations",
                     "icon": "fa-calculator",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/calculator",
-                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/calculator_app.js",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/script.js",
                     "size": 2,
                     "featured": false
+                },
+                {
+                    "name": "Dual Clock",
+                    "id": "dual_clock",
+                    "category": "productivity",
+                    "description": "Display two time zones simultaneously with automatic sync",
+                    "icon": "fa-clock",
+                    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/dual_clock",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/dual_clock/script.js",
+                    "size": 3,
+                    "featured": true
                 }
             ];
 
@@ -775,11 +823,11 @@ class WebScreenAdmin {
             },
             {
                 name: 'Time API',
-                id: 'timeapi_app',
+                id: 'timeapi',
                 category: 'productivity',
                 description: 'Display current time and date from world time API',
                 icon: 'fa-clock',
-                github_url: 'https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi_app',
+                github_url: 'https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi',
                 main_file: null,
                 size: 2,
                 featured: true
@@ -865,6 +913,22 @@ class WebScreenAdmin {
             </div>
         `);
 
+        // Update install button state based on connection and SD card
+        const installBtn = document.getElementById('installAppBtn');
+        if (!this.serial.connected) {
+            installBtn.disabled = true;
+            installBtn.innerHTML = '<i class="fas fa-plug"></i> Connect Device First';
+            installBtn.title = 'Connect to a WebScreen device to install apps';
+        } else if (!this.sdCardAvailable) {
+            installBtn.disabled = true;
+            installBtn.innerHTML = '<i class="fas fa-sd-card"></i> SD Card Required';
+            installBtn.title = 'Insert an SD card to install apps';
+        } else {
+            installBtn.disabled = false;
+            installBtn.innerHTML = '<i class="fas fa-download"></i> Install to SD Card';
+            installBtn.title = 'Download and install this app to your WebScreen';
+        }
+
         document.getElementById('appModal').classList.add('active');
         document.getElementById('appModal').dataset.appId = app.id;
     }
@@ -891,22 +955,74 @@ class WebScreenAdmin {
             return;
         }
 
+        if (!this.sdCardAvailable) {
+            this.showToast('SD card required to install apps', 'warning');
+            return;
+        }
+
+        const installBtn = document.getElementById('installAppBtn');
+        const originalText = installBtn.textContent;
+        installBtn.textContent = 'Installing...';
+        installBtn.disabled = true;
+
         try {
-            // Download app code
+            // Step 1: Download app code from GitHub
+            this.showToast('Downloading app...', 'info');
             const response = await fetch(app.main_file);
+            if (!response.ok) {
+                throw new Error('Failed to download app from GitHub');
+            }
             const code = await response.text();
 
-            // Upload to device
-            await this.serial.uploadFile(`${app.id}.js`, code);
+            // Step 2: Upload script to SD card
+            this.showToast('Uploading to SD card...', 'info');
+            const scriptFilename = `${app.id}.js`;
+            await this.serial.uploadFile(scriptFilename, code);
 
-            // Load the app
-            await this.serial.loadApp(`${app.id}.js`);
+            // Step 3: Read current webscreen.json
+            this.showToast('Updating configuration...', 'info');
+            let config = {};
+            const existingConfig = await this.serial.readFile('/webscreen.json');
+
+            if (existingConfig) {
+                try {
+                    config = JSON.parse(existingConfig);
+                } catch (e) {
+                    console.warn('Could not parse existing webscreen.json, creating new one');
+                }
+            }
+
+            // Step 4: Update webscreen.json with new script
+            // Preserve existing settings but update the script field
+            config.settings = config.settings || {
+                wifi: { ssid: '', pass: '' },
+                mqtt: { enabled: false }
+            };
+            config.screen = config.screen || {
+                background: '#000000',
+                foreground: '#FFFFFF'
+            };
+            config.script = scriptFilename;
+
+            // Step 5: Upload updated webscreen.json
+            const configJson = JSON.stringify(config, null, 2);
+            await this.serial.uploadFile('/webscreen.json', configJson);
 
             this.showToast(`${app.name} installed successfully!`, 'success');
             this.closeModal();
+
+            // Step 6: Ask if user wants to reboot to load the app
+            if (confirm(`${app.name} has been installed. Do you want to restart the device to run it?`)) {
+                await this.serial.reboot();
+                this.showToast('Device is restarting...', 'info');
+            }
+
         } catch (error) {
             console.error('Failed to install app:', error);
-            this.showToast('Failed to install app', 'error');
+            this.showToast(`Failed to install app: ${error.message}`, 'error');
+        } finally {
+            installBtn.textContent = originalText;
+            installBtn.disabled = false;
         }
     }
 
@@ -1062,24 +1178,154 @@ class WebScreenAdmin {
             return;
         }
 
+        if (!this.sdCardAvailable) {
+            this.showToast('SD card required to save settings', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('saveSystemBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
         try {
             const deviceName = document.getElementById('deviceName').value;
             const autoStart = document.getElementById('autoStart').value;
             const timezone = document.getElementById('timezone').value;
 
-            if (deviceName) {
-                await this.serial.setConfig('device.name', deviceName);
-            }
+            // Read current config
+            const config = await this.readWebScreenConfig();
+
+            // Update settings in webscreen.json
+            config.settings = config.settings || {};
+
+            // Update script if auto-start app is selected
             if (autoStart) {
-                await this.serial.setConfig('autostart.app', autoStart);
-            }
-            if (timezone) {
-                await this.serial.setConfig('timezone', timezone);
+                config.script = autoStart;
             }
 
-            this.showToast('Settings saved successfully', 'success');
+            // Store additional settings (these can be read by apps)
+            config.device = config.device || {};
+            if (deviceName) {
+                config.device.name = deviceName;
+            }
+            if (timezone) {
+                config.device.timezone = timezone;
+            }
+
+            // Save to webscreen.json
+            await this.saveWebScreenConfig(config);
+            this.showToast('Settings saved to webscreen.json', 'success');
+
+            // Update stored config
+            this.currentConfig = config;
+
         } catch (error) {
+            console.error('Failed to save settings:', error);
             this.showToast('Failed to save settings', 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    // Helper to read and update webscreen.json
+    async readWebScreenConfig() {
+        try {
+            const content = await this.serial.readFile('/webscreen.json');
+            if (content) {
+                return JSON.parse(content);
+            }
+        } catch (e) {
+            console.warn('Could not read webscreen.json:', e);
+        }
+        // Return default config if file doesn't exist or is invalid
+        return {
+            settings: {
+                wifi: { ssid: '', pass: '' },
+                mqtt: { enabled: false }
+            },
+            screen: {
+                background: '#000000',
+                foreground: '#FFFFFF'
+            },
+            script: ''
+        };
+    }
+
+    async saveWebScreenConfig(config) {
+        const configJson = JSON.stringify(config, null, 2);
+        await this.serial.uploadFile('/webscreen.json', configJson);
+    }
+
+    // Load current config and populate form fields
+    async loadCurrentConfig() {
+        if (!this.serial.connected || !this.sdCardAvailable) return;
+
+        try {
+            const config = await this.readWebScreenConfig();
+
+            // Populate WiFi fields
+            if (config.settings?.wifi) {
+                const ssidField = document.getElementById('wifiSSID');
+                const passwordField = document.getElementById('wifiPassword');
+
+                if (ssidField) {
+                    ssidField.value = config.settings.wifi.ssid || '';
+                }
+                if (passwordField) {
+                    // Don't show password for security, but indicate if one is set
+                    passwordField.value = '';
+                    if (config.settings.wifi.pass) {
+                        passwordField.placeholder = '••••••••• (password set)';
+                    } else {
+                        passwordField.placeholder = 'Enter WiFi password';
+                    }
+                }
+            }
+
+            // Populate device settings
+            if (config.device) {
+                const deviceNameField = document.getElementById('deviceName');
+                const timezoneField = document.getElementById('timezone');
+
+                if (deviceNameField && config.device.name) {
+                    deviceNameField.value = config.device.name;
+                }
+                if (timezoneField && config.device.timezone) {
+                    timezoneField.value = config.device.timezone;
+                }
+            }
+
+            // Populate script/auto-start dropdown if available
+            if (config.script) {
+                const autoStartSelect = document.getElementById('autoStart');
+                if (autoStartSelect) {
+                    // Add current script as an option if not already present
+                    let optionExists = false;
+                    for (const option of autoStartSelect.options) {
+                        if (option.value === config.script) {
+                            optionExists = true;
+                            option.selected = true;
+                            break;
+                        }
+                    }
+                    if (!optionExists && config.script) {
+                        const option = document.createElement('option');
+                        option.value = config.script;
+                        option.textContent = config.script;
+                        option.selected = true;
+                        autoStartSelect.appendChild(option);
+                    }
+                }
+            }
+
+            // Store current config for later use
+            this.currentConfig = config;
+
+            console.log('Loaded webscreen.json config:', config);
+        } catch (error) {
+            console.error('Failed to load current config:', error);
         }
     }
 
@@ -1087,6 +1333,11 @@ class WebScreenAdmin {
     async connectWiFi() {
         if (!this.serial.connected) {
             this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        if (!this.sdCardAvailable) {
+            this.showToast('SD card required to save WiFi settings', 'warning');
             return;
         }
 
@@ -1098,11 +1349,37 @@ class WebScreenAdmin {
             return;
         }
 
+        const btn = document.getElementById('connectWifiBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+
         try {
-            await this.serial.connectWiFi(ssid, password);
-            this.showToast('Connecting to WiFi... Device will restart', 'info');
+            // Read current config
+            const config = await this.readWebScreenConfig();
+
+            // Update WiFi settings
+            config.settings = config.settings || {};
+            config.settings.wifi = {
+                ssid: ssid,
+                pass: password
+            };
+
+            // Save to webscreen.json
+            await this.saveWebScreenConfig(config);
+            this.showToast('WiFi settings saved to webscreen.json', 'success');
+
+            // Ask if user wants to reboot to apply settings
+            if (confirm('WiFi settings saved. Do you want to restart the device to connect to the new network?')) {
+                await this.serial.reboot();
+                this.showToast('Device is restarting...', 'info');
+            }
         } catch (error) {
-            this.showToast('Failed to configure WiFi', 'error');
+            console.error('Failed to save WiFi settings:', error);
+            this.showToast('Failed to save WiFi settings', 'error');
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     }
 
