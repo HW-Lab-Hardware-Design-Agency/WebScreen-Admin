@@ -397,14 +397,23 @@ class WebScreenAdmin {
                 document.getElementById('deviceTotalHeap').textContent = stats.totalHeap || '-';
                 document.getElementById('deviceFreePSRAM').textContent = stats.freePSRAM || '-';
                 document.getElementById('deviceTotalPSRAM').textContent = stats.totalPSRAM || '-';
-                document.getElementById('deviceStorage').textContent = stats.sdCard || '-';
+                // Show SD card info: either size details or status
+                if (stats.sdCardSize) {
+                    document.getElementById('deviceStorage').textContent =
+                        `${stats.sdCardUsed || '?'} / ${stats.sdCardSize}`;
+                } else {
+                    document.getElementById('deviceStorage').textContent = stats.sdCard || '-';
+                }
                 document.getElementById('deviceCPU').textContent = stats.cpuFrequency || '-';
                 document.getElementById('deviceWifi').textContent = stats.wifi || '-';
                 document.getElementById('deviceIP').textContent = stats.ip || '-';
                 document.getElementById('deviceUptime').textContent = stats.uptime || '-';
 
-                // Check SD card availability
-                this.sdCardAvailable = stats.sdCard && !stats.sdCard.toLowerCase().includes('not mounted');
+                // Check SD card availability - if we have sdCardSize, it's definitely mounted
+                this.sdCardAvailable = !!(stats.sdCardSize ||
+                    (stats.sdCard && !stats.sdCard.toLowerCase().includes('not mounted') &&
+                     !stats.sdCard.toLowerCase().includes('not detected')));
+                console.log('SD Card available:', this.sdCardAvailable, 'sdCardSize:', stats.sdCardSize, 'sdCard:', stats.sdCard);
                 this.updateSDCardDependentSections();
             }
 
@@ -454,18 +463,22 @@ class WebScreenAdmin {
     }
 
     updateSDCardDependentSections() {
+        console.log('updateSDCardDependentSections called, sdCardAvailable:', this.sdCardAvailable);
         // Update nav items that require SD card
         this.sdRequiredSections.forEach(section => {
             const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
+            console.log(`Section ${section}: navItem found:`, !!navItem);
             if (navItem) {
                 if (this.sdCardAvailable) {
                     navItem.classList.remove('disabled');
                     navItem.style.opacity = '1';
                     navItem.style.pointerEvents = 'auto';
+                    console.log(`Enabled section: ${section}`);
                 } else {
                     navItem.classList.add('disabled');
                     navItem.style.opacity = '0.4';
                     navItem.style.pointerEvents = 'auto'; // Keep clickable to show warning
+                    console.log(`Disabled section: ${section}`);
                 }
             }
         });

@@ -209,8 +209,18 @@ class WebScreenSerial {
                         stats.freePSRAM = line.split(':')[1].trim();
                     } else if (line.includes('Total PSRAM:')) {
                         stats.totalPSRAM = line.split(':')[1].trim();
+                    } else if (line.includes('SD Card Size:')) {
+                        stats.sdCardSize = line.split(':')[1].trim();
+                        stats.sdCard = 'Mounted'; // SD card is available if we have size info
+                    } else if (line.includes('SD Card Used:')) {
+                        stats.sdCardUsed = line.split(':')[1].trim();
+                    } else if (line.includes('SD Card Free:')) {
+                        stats.sdCardFree = line.split(':')[1].trim();
                     } else if (line.includes('SD Card:')) {
+                        // Fallback for "SD Card: Not Mounted" or similar
                         stats.sdCard = line.split(':')[1].trim();
+                    } else if (line.includes('Signal Strength:')) {
+                        stats.signalStrength = line.split(':')[1].trim();
                     } else if (line.includes('WiFi:')) {
                         stats.wifi = line.split(':')[1].trim();
                     } else if (line.includes('IP Address:')) {
@@ -220,6 +230,7 @@ class WebScreenSerial {
                     } else if (line.includes('CPU Frequency:')) {
                         stats.cpuFrequency = line.split(':')[1].trim();
                         // CPU Frequency is the last stat, finish collecting
+                        console.log('Stats collected:', stats);
                         this.activeCollectors.delete(collectorId);
                         resolve(stats);
                     }
