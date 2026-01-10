@@ -302,6 +302,57 @@ class WebScreenSerial {
         return true;
     }
 
+    async readFile(filename) {
+        return new Promise((resolve) => {
+            let content = '';
+            let collecting = false;
+            let endDetected = false;
+            const collectorId = 'cat_' + Date.now();
+
+            const collector = (line) => {
+                // Start collecting after we see the filename echoed or content starts
+                if (line.includes(`Contents of ${filename}`) || line.includes('=== FILE START ===')) {
+                    collecting = true;
+                    return;
+                }
+
+                // End of file marker
+                if (line.includes('=== FILE END ===') || line.includes('--- End of file ---')) {
+                    endDetected = true;
+                    this.activeCollectors.delete(collectorId);
+                    resolve(content.trim());
+                    return;
+                }
+
+                // Error handling
+                if (line.includes('Error:') || line.includes('File not found')) {
+                    this.activeCollectors.delete(collectorId);
+                    resolve(null);
+                    return;
+                }
+
+                // Collect content lines
+                if (collecting && !endDetected) {
+                    content += line + '\n';
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand(`/cat ${filename}`);
+
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                this.activeCollectors.delete(collectorId);
+                // Return what we have if we collected something
+                if (content.trim()) {
+                    resolve(content.trim());
+                } else {
+                    resolve(null);
+                }
+            }, 5000);
+        });
+    }
+
     async loadApp(filename) {
         await this.sendCommand(`/load ${filename}`);
         return true;
