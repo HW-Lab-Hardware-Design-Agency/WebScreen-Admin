@@ -496,6 +496,34 @@
                         <span id="modalAppSize">0 KB</span>
                     </div>
                 </div>
+                <!-- Installation Progress -->
+                <div class="install-progress" id="installProgress" style="display: none;">
+                    <div class="progress-status">
+                        <i class="fas fa-spinner fa-spin" id="progressIcon"></i>
+                        <span id="progressText">Preparing installation...</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-steps">
+                        <div class="progress-step" id="step1" data-step="1">
+                            <i class="fas fa-download"></i>
+                            <span>Download</span>
+                        </div>
+                        <div class="progress-step" id="step2" data-step="2">
+                            <i class="fas fa-upload"></i>
+                            <span>Upload</span>
+                        </div>
+                        <div class="progress-step" id="step3" data-step="3">
+                            <i class="fas fa-cog"></i>
+                            <span>Configure</span>
+                        </div>
+                        <div class="progress-step" id="step4" data-step="4">
+                            <i class="fas fa-sync"></i>
+                            <span>Restart</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelInstallBtn">Cancel</button>

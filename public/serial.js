@@ -195,12 +195,20 @@ class WebScreenSerial {
         return new Promise((resolve) => {
             let stats = {};
             let collecting = false;
+            let resolved = false;
             const collectorId = 'stats_' + Date.now();
 
             const collector = (line) => {
+                if (resolved) return;
+
+                // Start collecting on header
                 if (line.includes('=== System Statistics ===')) {
                     collecting = true;
-                } else if (collecting) {
+                    console.log('getStats: Started collecting');
+                    return;
+                }
+
+                if (collecting) {
                     if (line.includes('Free Heap:')) {
                         stats.freeHeap = line.split(':')[1].trim();
                     } else if (line.includes('Total Heap:')) {
@@ -211,14 +219,15 @@ class WebScreenSerial {
                         stats.totalPSRAM = line.split(':')[1].trim();
                     } else if (line.includes('SD Card Size:')) {
                         stats.sdCardSize = line.split(':')[1].trim();
-                        stats.sdCard = 'Mounted'; // SD card is available if we have size info
+                        stats.sdCard = 'Mounted';
+                        console.log('getStats: Found SD Card Size:', stats.sdCardSize);
                     } else if (line.includes('SD Card Used:')) {
                         stats.sdCardUsed = line.split(':')[1].trim();
                     } else if (line.includes('SD Card Free:')) {
                         stats.sdCardFree = line.split(':')[1].trim();
-                    } else if (line.includes('SD Card:')) {
-                        // Fallback for "SD Card: Not Mounted" or similar
+                    } else if (line.includes('SD Card:') && !line.includes('Size') && !line.includes('Used') && !line.includes('Free')) {
                         stats.sdCard = line.split(':')[1].trim();
+                        console.log('getStats: Found SD Card status:', stats.sdCard);
                     } else if (line.includes('Signal Strength:')) {
                         stats.signalStrength = line.split(':')[1].trim();
                     } else if (line.includes('WiFi:')) {
@@ -230,7 +239,8 @@ class WebScreenSerial {
                     } else if (line.includes('CPU Frequency:')) {
                         stats.cpuFrequency = line.split(':')[1].trim();
                         // CPU Frequency is the last stat, finish collecting
-                        console.log('Stats collected:', stats);
+                        console.log('getStats: Complete, stats:', stats);
+                        resolved = true;
                         this.activeCollectors.delete(collectorId);
                         resolve(stats);
                     }
@@ -239,14 +249,18 @@ class WebScreenSerial {
 
             this.activeCollectors.set(collectorId, collector);
             this.sendCommand('/stats');
+            console.log('getStats: Sent /stats command');
 
             // Timeout after 5 seconds
             setTimeout(() => {
-                this.activeCollectors.delete(collectorId);
-                if (Object.keys(stats).length > 0) {
-                    resolve(stats);
-                } else {
-                    resolve(null);
+                if (!resolved && this.activeCollectors.has(collectorId)) {
+                    console.log('getStats: Timeout, returning stats:', stats);
+                    this.activeCollectors.delete(collectorId);
+                    if (Object.keys(stats).length > 0) {
+                        resolve(stats);
+                    } else {
+                        resolve(null);
+                    }
                 }
             }, 5000);
         });
@@ -255,56 +269,152 @@ class WebScreenSerial {
     async listFiles(path = '/') {
         return new Promise((resolve) => {
             const files = [];
-            let collecting = false;
+            let headerSeen = false;
+            let resolved = false;
             const collectorId = 'files_' + Date.now();
 
             const collector = (line) => {
-                if (line.includes('Directory listing')) {
-                    collecting = true;
-                } else if (collecting && line.startsWith('[')) {
-                    // Parse file entry: [FILE] filename (size bytes)
-                    const match = line.match(/\[(FILE|DIR)\]\s+(.+?)(?:\s+\((\d+)\s+bytes\))?$/);
-                    if (match) {
-                        files.push({
-                            type: match[1].toLowerCase(),
-                            name: match[2],
-                            size: match[3] ? parseInt(match[3]) : 0
-                        });
-                    }
-                } else if (collecting && line.includes('Total:')) {
+                if (resolved) return;
+
+                console.log('listFiles parsing line:', line);
+
+                // Skip empty lines and prompts
+                if (!line.trim() || line.includes('WebScreen>')) return;
+
+                // Detect header lines (start of listing)
+                if (line.includes('Directory listing') ||
+                    line.includes('Contents of') ||
+                    line.includes('Type') && line.includes('Size') && line.includes('Name')) {
+                    headerSeen = true;
+                    console.log('listFiles: Header detected');
+                    return;
+                }
+
+                // Skip separator lines (but don't treat as end marker)
+                if (line.match(/^-+$/) || line.includes('--------------------------------')) {
+                    console.log('listFiles: Separator line, skipping');
+                    return;
+                }
+
+                // End of listing markers - must be specific
+                if (line.includes('Total:') && line.includes('files') ||
+                    line.match(/^\d+\s+files?,\s+\d+\s+directories?/i) ||
+                    line.includes('bytes free')) {
+                    console.log('listFiles: End marker, found', files.length, 'files');
+                    resolved = true;
                     this.activeCollectors.delete(collectorId);
                     resolve(files);
+                    return;
+                }
+
+                // Try to parse file entries with multiple patterns
+
+                // Pattern 1: DIR                dirname or FILE    size     filename
+                // Example: "DIR                System Volume Information"
+                // Example: "FILE    121 B      blink.js"
+                let match = line.match(/^(DIR|FILE)\s+(?:(\d+(?:\.\d+)?)\s*([BKBMBGB]+)\s+)?(.+)$/i);
+                if (match) {
+                    const type = match[1].toLowerCase() === 'dir' ? 'dir' : 'file';
+                    const sizeNum = match[2] ? parseFloat(match[2]) : 0;
+                    const sizeUnit = match[3] ? match[3].toUpperCase() : 'B';
+                    const name = match[4].trim();
+
+                    // Convert size to bytes
+                    let sizeBytes = sizeNum;
+                    if (sizeUnit === 'KB' || sizeUnit === 'K') sizeBytes = sizeNum * 1024;
+                    else if (sizeUnit === 'MB' || sizeUnit === 'M') sizeBytes = sizeNum * 1024 * 1024;
+                    else if (sizeUnit === 'GB' || sizeUnit === 'G') sizeBytes = sizeNum * 1024 * 1024 * 1024;
+
+                    if (name && name.length > 0) {
+                        files.push({
+                            type: type,
+                            name: name,
+                            size: Math.round(sizeBytes)
+                        });
+                        console.log('listFiles: Parsed DIR/FILE:', type, name, sizeBytes);
+                    }
+                    return;
+                }
+
+                // Pattern 2: [FILE] filename (size bytes) or [DIR] dirname
+                match = line.match(/\[(FILE|DIR)\]\s+(.+?)(?:\s+\((\d+)\s*bytes?\))?$/i);
+                if (match) {
+                    const name = match[2].trim();
+                    if (name && !name.includes('listing') && !name.includes('===')) {
+                        files.push({
+                            type: match[1].toLowerCase(),
+                            name: name,
+                            size: match[3] ? parseInt(match[3]) : 0
+                        });
+                        console.log('listFiles: Parsed [TYPE]:', name);
+                    }
+                    return;
+                }
+
+                // Pattern 3: <DIR> dirname
+                match = line.match(/^<(DIR)>\s+(.+)$/i);
+                if (match) {
+                    files.push({
+                        type: 'dir',
+                        name: match[2].trim(),
+                        size: 0
+                    });
+                    console.log('listFiles: Parsed <DIR>:', match[2]);
+                    return;
                 }
             };
 
             this.activeCollectors.set(collectorId, collector);
             this.sendCommand(`/ls ${path}`);
+            console.log('listFiles: Sent /ls command for', path);
 
-            // Timeout after 5 seconds
+            // Timeout after 3 seconds - return whatever we have
             setTimeout(() => {
-                this.activeCollectors.delete(collectorId);
-                resolve(files);
-            }, 5000);
+                if (!resolved && this.activeCollectors.has(collectorId)) {
+                    console.log('listFiles: Timeout, returning', files.length, 'files');
+                    this.activeCollectors.delete(collectorId);
+                    resolve(files);
+                }
+            }, 3000);
         });
     }
 
     async uploadFile(filename, content) {
-        // Start file write
-        await this.sendCommand(`/write ${filename}`);
+        console.log('uploadFile: Starting upload to', filename, '- content length:', content.length);
+
+        // The device's /write command only supports .js files and auto-adds the extension
+        // Check if this is a .js file
+        if (!filename.endsWith('.js')) {
+            throw new Error('Device firmware only supports uploading .js files. Other file types are not supported.');
+        }
+
+        // Strip the .js extension since /write adds it automatically
+        const filenameWithoutExt = filename.replace(/\.js$/, '');
+        console.log('uploadFile: Using /write with filename:', filenameWithoutExt);
+
+        await this.sendCommand(`/write ${filenameWithoutExt}`);
 
         // Wait a bit for the command to be processed
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Send content line by line
         const lines = content.split('\n');
-        for (const line of lines) {
-            await this.sendCommand(line);
-            await new Promise(resolve => setTimeout(resolve, 50));
+        console.log('uploadFile: Sending', lines.length, 'lines');
+
+        for (let i = 0; i < lines.length; i++) {
+            await this.sendCommand(lines[i]);
+            // Small delay between lines to avoid overwhelming the device
+            await new Promise(resolve => setTimeout(resolve, 30));
         }
 
         // End file write
+        await new Promise(resolve => setTimeout(resolve, 100));
         await this.sendCommand('END');
 
+        // Wait for file to be finalized
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        console.log('uploadFile: Upload complete for', filename);
         return true;
     }
 
@@ -320,31 +430,55 @@ class WebScreenSerial {
             let endDetected = false;
             const collectorId = 'cat_' + Date.now();
 
+            console.log('readFile: Reading', filename);
+
             const collector = (line) => {
-                // Start collecting after we see the filename echoed or content starts
-                if (line.includes(`Contents of ${filename}`) || line.includes('=== FILE START ===')) {
+                if (endDetected) return;
+
+                console.log('readFile parsing line:', line.substring(0, 100), 'collecting:', collecting);
+
+                // Skip prompts
+                if (line.includes('WebScreen>') && !line.includes(filename)) {
+                    return;
+                }
+
+                // Start collecting after we see the filename header
+                // Pattern: "--- /webscreen.json ---" or "Contents of /webscreen.json"
+                if (line.includes(`--- ${filename}`) ||
+                    line.includes(`Contents of ${filename}`) ||
+                    line.includes('=== FILE START ===') ||
+                    line.includes(`Reading ${filename}`) ||
+                    line.includes(`File: ${filename}`)) {
                     collecting = true;
+                    console.log('readFile: Started collecting content');
                     return;
                 }
 
                 // End of file marker
-                if (line.includes('=== FILE END ===') || line.includes('--- End of file ---')) {
+                if (line.includes('--- End of file ---') ||
+                    line.includes('=== FILE END ===') ||
+                    (line.includes('---') && line.includes('EOF')) ||
+                    (collecting && line.match(/^\d+\s+bytes?\s+read/i))) {
                     endDetected = true;
+                    console.log('readFile: End detected, content length:', content.length);
                     this.activeCollectors.delete(collectorId);
                     resolve(content.trim());
                     return;
                 }
 
                 // Error handling
-                if (line.includes('Error:') || line.includes('File not found')) {
+                if (line.includes('[ERROR]') || line.includes('File not found') || line.includes('not found')) {
+                    console.log('readFile: Error or file not found');
+                    endDetected = true;
                     this.activeCollectors.delete(collectorId);
                     resolve(null);
                     return;
                 }
 
                 // Collect content lines
-                if (collecting && !endDetected) {
+                if (collecting) {
                     content += line + '\n';
+                    console.log('readFile: Added line, content now:', content.length, 'chars');
                 }
             };
 
@@ -353,12 +487,15 @@ class WebScreenSerial {
 
             // Timeout after 5 seconds
             setTimeout(() => {
-                this.activeCollectors.delete(collectorId);
-                // Return what we have if we collected something
-                if (content.trim()) {
-                    resolve(content.trim());
-                } else {
-                    resolve(null);
+                if (!endDetected && this.activeCollectors.has(collectorId)) {
+                    console.log('readFile: Timeout, collected', content.length, 'chars');
+                    this.activeCollectors.delete(collectorId);
+                    // Return what we have if we collected something
+                    if (content.trim()) {
+                        resolve(content.trim());
+                    } else {
+                        resolve(null);
+                    }
                 }
             }, 5000);
         });
@@ -414,22 +551,69 @@ class WebScreenSerial {
 
     async getConfig(key) {
         return new Promise((resolve) => {
-            const callback = (line) => {
-                if (line.includes(`${key} =`)) {
-                    const value = line.split('=')[1].trim();
-                    this.callbacks.delete(key);
-                    resolve(value);
+            let resolved = false;
+            const collectorId = 'config_' + key + '_' + Date.now();
+
+            const collector = (line) => {
+                if (resolved) return;
+
+                console.log('getConfig parsing line for', key + ':', line);
+
+                // Try multiple patterns to match config value
+                // Pattern 1: key = value
+                if (line.includes(`${key} =`) || line.includes(`${key}=`)) {
+                    const value = line.split('=')[1]?.trim();
+                    if (value !== undefined) {
+                        console.log('getConfig: Found', key, '=', value);
+                        resolved = true;
+                        this.activeCollectors.delete(collectorId);
+                        resolve(value);
+                        return;
+                    }
+                }
+
+                // Pattern 2: key: value
+                if (line.includes(`${key}:`) || line.toLowerCase().includes(`${key.toLowerCase()}:`)) {
+                    const parts = line.split(':');
+                    if (parts.length >= 2) {
+                        const value = parts.slice(1).join(':').trim();
+                        console.log('getConfig: Found', key, ':', value);
+                        resolved = true;
+                        this.activeCollectors.delete(collectorId);
+                        resolve(value);
+                        return;
+                    }
+                }
+
+                // Pattern 3: Just the value on its own line after the key
+                // (for simple responses like "MySSID")
+                if (line.trim() && !line.includes('config') && !line.includes('Error') &&
+                    !line.includes('=') && !line.includes(':') && line.trim().length < 100) {
+                    // This might be just the value
+                    console.log('getConfig: Possible value for', key, ':', line.trim());
+                }
+
+                // Error handling
+                if (line.includes('not found') || line.includes('Error') || line.includes('unknown')) {
+                    console.log('getConfig: Not found or error for', key);
+                    resolved = true;
+                    this.activeCollectors.delete(collectorId);
+                    resolve(null);
                 }
             };
 
-            this.callbacks.set(key, callback);
+            this.activeCollectors.set(collectorId, collector);
             this.sendCommand(`/config get ${key}`);
+            console.log('getConfig: Sent /config get', key);
 
-            // Timeout after 3 seconds
+            // Timeout after 2 seconds
             setTimeout(() => {
-                this.callbacks.delete(key);
-                resolve(null);
-            }, 3000);
+                if (!resolved) {
+                    console.log('getConfig: Timeout for', key);
+                    this.activeCollectors.delete(collectorId);
+                    resolve(null);
+                }
+            }, 2000);
         });
     }
 

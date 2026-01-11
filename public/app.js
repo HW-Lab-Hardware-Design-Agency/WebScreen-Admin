@@ -302,6 +302,9 @@ class WebScreenAdmin {
         } else {
             try {
                 await this.serial.connect();
+                // Give device time to initialize after connection
+                this.showToast('Connected! Loading device info...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 await this.loadDeviceInfo();
             } catch (error) {
                 this.showToast('Failed to connect to device', 'error');
@@ -377,6 +380,10 @@ class WebScreenAdmin {
 
     async loadDeviceInfo() {
         try {
+            // Send a blank line first to wake up the device/clear any pending input
+            await this.serial.sendCommand('');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // Get device information (chip model, firmware version, etc.)
             const info = await this.serial.getDeviceInfo();
             if (info) {
@@ -408,6 +415,17 @@ class WebScreenAdmin {
                 document.getElementById('deviceWifi').textContent = stats.wifi || '-';
                 document.getElementById('deviceIP').textContent = stats.ip || '-';
                 document.getElementById('deviceUptime').textContent = stats.uptime || '-';
+
+                // Also update Network Status section
+                const netStatus = document.getElementById('netStatus');
+                const netIP = document.getElementById('netIP');
+                const netSignal = document.getElementById('netSignal');
+                const netMAC = document.getElementById('netMAC');
+
+                if (netStatus) netStatus.textContent = stats.wifi || 'Not Connected';
+                if (netIP) netIP.textContent = stats.ip || '-';
+                if (netSignal) netSignal.textContent = stats.signalStrength || '-';
+                if (netMAC && info) netMAC.textContent = info.macAddress || '-';
 
                 // Check SD card availability - if we have sdCardSize, it's definitely mounted
                 this.sdCardAvailable = !!(stats.sdCardSize ||
@@ -498,8 +516,17 @@ class WebScreenAdmin {
         this.currentSection = section;
 
         // Section-specific initialization
-        if (section === 'files' && this.serial.connected) {
+        if (section === 'files' && this.serial.connected && this.sdCardAvailable) {
+            console.log('switchSection: Triggering refreshFiles for files section');
             this.refreshFiles();
+        } else if (section === 'files') {
+            console.log('switchSection: Cannot refresh files - connected:', this.serial.connected, 'sdCardAvailable:', this.sdCardAvailable);
+        }
+
+        // Reload config when switching to settings or network sections
+        if ((section === 'config' || section === 'network') && this.serial.connected && this.sdCardAvailable) {
+            console.log('switchSection: Reloading config for', section);
+            this.loadCurrentConfig();
         }
     }
 
@@ -915,7 +942,7 @@ class WebScreenAdmin {
         document.getElementById('modalAppName').textContent = app.name;
         document.getElementById('modalAppDesc').textContent = app.description;
         document.getElementById('modalAppVersion').textContent = '1.0.0';
-        document.getElementById('modalAppAuthor').textContent = 'WebScreen Community';
+        document.getElementById('modalAppAuthor').textContent = 'HW Media Lab LLC';
         document.getElementById('modalAppSize').textContent = `${app.size} KB`;
 
         const modalIcon = document.getElementById('modalAppIcon');
@@ -974,89 +1001,172 @@ class WebScreenAdmin {
         }
 
         const installBtn = document.getElementById('installAppBtn');
-        const originalText = installBtn.textContent;
-        installBtn.textContent = 'Installing...';
-        installBtn.disabled = true;
+        const cancelBtn = document.getElementById('cancelInstallBtn');
+        const progressEl = document.getElementById('installProgress');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const progressIcon = document.getElementById('progressIcon');
+        const progressStatus = progressEl.querySelector('.progress-status');
+
+        // Hide buttons and show progress
+        installBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        progressEl.style.display = 'block';
+
+        // Helper to update progress
+        const updateProgress = (step, percent, text) => {
+            progressBar.style.width = `${percent}%`;
+            progressText.textContent = text;
+
+            // Update step indicators
+            for (let i = 1; i <= 4; i++) {
+                const stepEl = document.getElementById(`step${i}`);
+                stepEl.classList.remove('active', 'completed');
+                if (i < step) {
+                    stepEl.classList.add('completed');
+                } else if (i === step) {
+                    stepEl.classList.add('active');
+                }
+            }
+        };
+
+        // Helper to show error
+        const showError = (message) => {
+            progressStatus.classList.add('error');
+            progressIcon.classList.remove('fa-spinner', 'fa-spin');
+            progressIcon.classList.add('fa-exclamation-circle');
+            progressText.textContent = message;
+            progressBar.style.background = 'var(--danger-color)';
+
+            // Show buttons again after error
+            setTimeout(() => {
+                installBtn.style.display = '';
+                cancelBtn.style.display = '';
+                progressEl.style.display = 'none';
+                // Reset progress state
+                progressStatus.classList.remove('error');
+                progressIcon.classList.remove('fa-exclamation-circle');
+                progressIcon.classList.add('fa-spinner', 'fa-spin');
+                progressBar.style.width = '0%';
+                progressBar.style.background = '';
+            }, 3000);
+        };
+
+        // Helper to show success
+        const showSuccess = (message) => {
+            progressStatus.classList.add('success');
+            progressIcon.classList.remove('fa-spinner', 'fa-spin');
+            progressIcon.classList.add('fa-check-circle');
+            progressText.textContent = message;
+        };
 
         try {
             // Step 1: Download app code from GitHub
-            this.showToast('Downloading app...', 'info');
+            updateProgress(1, 10, 'Downloading app from GitHub...');
             const response = await fetch(app.main_file);
             if (!response.ok) {
                 throw new Error('Failed to download app from GitHub');
             }
             const code = await response.text();
+            updateProgress(1, 25, 'Download complete');
 
             // Step 2: Upload script to SD card
-            this.showToast('Uploading to SD card...', 'info');
+            updateProgress(2, 30, 'Uploading to SD card...');
             const scriptFilename = `${app.id}.js`;
             await this.serial.uploadFile(scriptFilename, code);
+            updateProgress(2, 60, 'Upload complete');
 
-            // Step 3: Read current webscreen.json
-            this.showToast('Updating configuration...', 'info');
-            let config = {};
-            const existingConfig = await this.serial.readFile('/webscreen.json');
+            // Step 3: Update the script setting in config
+            updateProgress(3, 65, 'Updating configuration...');
+            await this.serial.setConfig('script', scriptFilename);
+            updateProgress(3, 80, 'Configuration saved');
 
-            if (existingConfig) {
-                try {
-                    config = JSON.parse(existingConfig);
-                } catch (e) {
-                    console.warn('Could not parse existing webscreen.json, creating new one');
+            // Step 4: Restart device
+            updateProgress(4, 85, `${app.name} installed! Restarting device...`);
+
+            // Mark all steps as completed
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`step${i}`).classList.remove('active');
+                document.getElementById(`step${i}`).classList.add('completed');
+            }
+
+            updateProgress(4, 100, 'Restarting device to load app...');
+            showSuccess(`${app.name} installed successfully! Device is restarting...`);
+
+            // Wait a moment for the user to see the success message, then reboot
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            await this.serial.reboot();
+
+            // Close modal after a brief delay
+            setTimeout(() => {
+                this.closeModal();
+                // Reset progress UI for next time
+                installBtn.style.display = '';
+                cancelBtn.style.display = '';
+                progressEl.style.display = 'none';
+                progressStatus.classList.remove('success');
+                progressIcon.classList.remove('fa-check-circle');
+                progressIcon.classList.add('fa-spinner', 'fa-spin');
+                progressBar.style.width = '0%';
+                for (let i = 1; i <= 4; i++) {
+                    document.getElementById(`step${i}`).classList.remove('active', 'completed');
                 }
-            }
-
-            // Step 4: Update webscreen.json with new script
-            // Preserve existing settings but update the script field
-            config.settings = config.settings || {
-                wifi: { ssid: '', pass: '' },
-                mqtt: { enabled: false }
-            };
-            config.screen = config.screen || {
-                background: '#000000',
-                foreground: '#FFFFFF'
-            };
-            config.script = scriptFilename;
-
-            // Step 5: Upload updated webscreen.json
-            const configJson = JSON.stringify(config, null, 2);
-            await this.serial.uploadFile('/webscreen.json', configJson);
-
-            this.showToast(`${app.name} installed successfully!`, 'success');
-            this.closeModal();
-
-            // Step 6: Ask if user wants to reboot to load the app
-            if (confirm(`${app.name} has been installed. Do you want to restart the device to run it?`)) {
-                await this.serial.reboot();
-                this.showToast('Device is restarting...', 'info');
-            }
+            }, 2000);
 
         } catch (error) {
             console.error('Failed to install app:', error);
+            showError(`Installation failed: ${error.message}`);
             this.showToast(`Failed to install app: ${error.message}`, 'error');
-        } finally {
-            installBtn.textContent = originalText;
-            installBtn.disabled = false;
         }
     }
 
     // File Manager functions
     async refreshFiles() {
-        if (!this.serial.connected) return;
+        if (!this.serial.connected) {
+            console.log('refreshFiles: Not connected');
+            return;
+        }
+
+        if (!this.sdCardAvailable) {
+            console.log('refreshFiles: SD card not available');
+            return;
+        }
+
+        // Show loading state
+        const fileList = document.getElementById('fileList');
+        if (fileList) {
+            fileList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading files...</div>';
+        }
 
         try {
+            console.log('refreshFiles: Loading files from', this.currentPath);
             this.files = await this.serial.listFiles(this.currentPath);
+            console.log('refreshFiles: Got files:', this.files);
             this.renderFiles();
         } catch (error) {
             console.error('Failed to load files:', error);
+            this.showToast('Failed to load files', 'error');
+            if (fileList) {
+                fileList.innerHTML = '<div style="text-align: center; color: var(--danger-color); padding: 2rem;"><i class="fas fa-exclamation-circle"></i> Failed to load files</div>';
+            }
         }
     }
 
     renderFiles() {
         const fileList = document.getElementById('fileList');
-        if (!fileList) return;
+        if (!fileList) {
+            console.log('renderFiles: fileList element not found');
+            return;
+        }
 
-        if (this.files.length === 0) {
-            fileList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;">No files found</div>';
+        console.log('renderFiles: Rendering', this.files.length, 'files');
+
+        if (!this.files || this.files.length === 0) {
+            fileList.innerHTML = `
+                <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                    <i class="fas fa-folder-open" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                    No files found in ${this.currentPath}
+                </div>`;
             return;
         }
 
@@ -1135,24 +1245,35 @@ class WebScreenAdmin {
             return;
         }
 
+        if (!this.sdCardAvailable) {
+            this.showToast('SD card required to upload files', 'warning');
+            return;
+        }
+
         for (const file of files) {
             try {
-                const content = await this.readFile(file);
-                await this.serial.uploadFile(file.name, content);
+                this.showToast(`Uploading ${file.name}...`, 'info');
+                const content = await this.readFileFromBrowser(file);
+                // Include current path in filename
+                const fullPath = this.currentPath + file.name;
+                console.log('Uploading file to:', fullPath);
+                await this.serial.uploadFile(fullPath, content);
                 this.showToast(`${file.name} uploaded successfully`, 'success');
             } catch (error) {
-                this.showToast(`Failed to upload ${file.name}`, 'error');
+                console.error('Upload error:', error);
+                this.showToast(`Failed to upload ${file.name}: ${error.message}`, 'error');
             }
         }
 
-        this.refreshFiles();
+        // Refresh file list after upload
+        await this.refreshFiles();
     }
 
-    readFile(file) {
+    readFileFromBrowser(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = reject;
+            reader.onerror = (e) => reject(new Error('Failed to read file'));
             reader.readAsText(file);
         });
     }
@@ -1206,32 +1327,18 @@ class WebScreenAdmin {
             const autoStart = document.getElementById('autoStart').value;
             const timezone = document.getElementById('timezone').value;
 
-            // Read current config
-            const config = await this.readWebScreenConfig();
-
-            // Update settings in webscreen.json
-            config.settings = config.settings || {};
-
-            // Update script if auto-start app is selected
-            if (autoStart) {
-                config.script = autoStart;
-            }
-
-            // Store additional settings (these can be read by apps)
-            config.device = config.device || {};
+            // Update settings using /config set commands
             if (deviceName) {
-                config.device.name = deviceName;
+                await this.serial.setConfig('device.name', deviceName);
+            }
+            if (autoStart) {
+                await this.serial.setConfig('script', autoStart);
             }
             if (timezone) {
-                config.device.timezone = timezone;
+                await this.serial.setConfig('timezone', timezone);
             }
 
-            // Save to webscreen.json
-            await this.saveWebScreenConfig(config);
-            this.showToast('Settings saved to webscreen.json', 'success');
-
-            // Update stored config
-            this.currentConfig = config;
+            this.showToast('Settings saved!', 'success');
 
         } catch (error) {
             console.error('Failed to save settings:', error);
@@ -1245,14 +1352,19 @@ class WebScreenAdmin {
     // Helper to read and update webscreen.json
     async readWebScreenConfig() {
         try {
+            console.log('Reading webscreen.json...');
             const content = await this.serial.readFile('/webscreen.json');
+            console.log('webscreen.json raw content:', content);
             if (content) {
-                return JSON.parse(content);
+                const config = JSON.parse(content);
+                console.log('webscreen.json parsed:', config);
+                return config;
             }
         } catch (e) {
-            console.warn('Could not read webscreen.json:', e);
+            console.warn('Could not read/parse webscreen.json:', e);
         }
         // Return default config if file doesn't exist or is invalid
+        console.log('Using default config');
         return {
             settings: {
                 wifi: { ssid: '', pass: '' },
@@ -1273,70 +1385,118 @@ class WebScreenAdmin {
 
     // Load current config and populate form fields
     async loadCurrentConfig() {
-        if (!this.serial.connected || !this.sdCardAvailable) return;
+        if (!this.serial.connected || !this.sdCardAvailable) {
+            console.log('loadCurrentConfig: Not connected or no SD card');
+            return;
+        }
+
+        console.log('loadCurrentConfig: Starting to load config...');
 
         try {
-            const config = await this.readWebScreenConfig();
+            // Try to get config values using /config get commands (more reliable)
+            const configValues = {};
+
+            // Get WiFi SSID
+            const wifiSsid = await this.serial.getConfig('wifi.ssid');
+            if (wifiSsid) configValues.wifiSsid = wifiSsid;
+
+            // Get WiFi password (might not be returned for security)
+            const wifiPass = await this.serial.getConfig('wifi.password');
+            if (wifiPass) configValues.wifiPass = wifiPass;
+
+            // Get script
+            const script = await this.serial.getConfig('script');
+            if (script) configValues.script = script;
+
+            // Get device name
+            const deviceName = await this.serial.getConfig('device.name');
+            if (deviceName) configValues.deviceName = deviceName;
+
+            // Get timezone
+            const timezone = await this.serial.getConfig('timezone');
+            if (timezone) configValues.timezone = timezone;
+
+            console.log('loadCurrentConfig: Got config values:', configValues);
+
+            // Also try reading webscreen.json as fallback
+            const fileConfig = await this.readWebScreenConfig();
+            console.log('loadCurrentConfig: File config:', fileConfig);
+
+            // Merge configs (command values take priority)
+            const wifiConfig = fileConfig.settings?.wifi || fileConfig.wifi || {};
+            const finalSsid = configValues.wifiSsid || wifiConfig.ssid || fileConfig['wifi.ssid'] || '';
+            const finalPass = configValues.wifiPass || wifiConfig.pass || wifiConfig.password || '';
+            const finalScript = configValues.script || fileConfig.script || '';
+            const finalDeviceName = configValues.deviceName || fileConfig.device?.name || fileConfig.name || '';
+            const finalTimezone = configValues.timezone || fileConfig.device?.timezone || fileConfig.timezone || '';
+
+            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript, 'DeviceName:', finalDeviceName);
 
             // Populate WiFi fields
-            if (config.settings?.wifi) {
-                const ssidField = document.getElementById('wifiSSID');
-                const passwordField = document.getElementById('wifiPassword');
+            const ssidField = document.getElementById('wifiSSID');
+            const passwordField = document.getElementById('wifiPassword');
 
-                if (ssidField) {
-                    ssidField.value = config.settings.wifi.ssid || '';
-                }
-                if (passwordField) {
-                    // Don't show password for security, but indicate if one is set
-                    passwordField.value = '';
-                    if (config.settings.wifi.pass) {
-                        passwordField.placeholder = '••••••••• (password set)';
-                    } else {
-                        passwordField.placeholder = 'Enter WiFi password';
-                    }
+            console.log('loadCurrentConfig: Found ssidField:', !!ssidField, 'passwordField:', !!passwordField);
+
+            if (ssidField) {
+                ssidField.value = finalSsid;
+                console.log('loadCurrentConfig: Set WiFi SSID to:', finalSsid);
+            }
+            if (passwordField) {
+                passwordField.value = '';
+                if (finalPass) {
+                    passwordField.placeholder = '••••••••• (password set)';
+                } else {
+                    passwordField.placeholder = 'Enter WiFi password';
                 }
             }
 
             // Populate device settings
-            if (config.device) {
-                const deviceNameField = document.getElementById('deviceName');
-                const timezoneField = document.getElementById('timezone');
+            const deviceNameField = document.getElementById('deviceName');
+            const timezoneField = document.getElementById('timezone');
 
-                if (deviceNameField && config.device.name) {
-                    deviceNameField.value = config.device.name;
-                }
-                if (timezoneField && config.device.timezone) {
-                    timezoneField.value = config.device.timezone;
+            console.log('loadCurrentConfig: Found deviceNameField:', !!deviceNameField, 'timezoneField:', !!timezoneField);
+
+            if (deviceNameField) {
+                deviceNameField.value = finalDeviceName;
+                console.log('loadCurrentConfig: Set device name to:', finalDeviceName);
+            }
+            if (timezoneField && finalTimezone) {
+                for (const option of timezoneField.options) {
+                    if (option.value === finalTimezone || option.textContent.includes(finalTimezone)) {
+                        option.selected = true;
+                        break;
+                    }
                 }
             }
 
-            // Populate script/auto-start dropdown if available
-            if (config.script) {
+            // Populate script/auto-start dropdown
+            if (finalScript) {
                 const autoStartSelect = document.getElementById('autoStart');
+                console.log('loadCurrentConfig: Found autoStartSelect:', !!autoStartSelect);
                 if (autoStartSelect) {
-                    // Add current script as an option if not already present
                     let optionExists = false;
                     for (const option of autoStartSelect.options) {
-                        if (option.value === config.script) {
+                        if (option.value === finalScript) {
                             optionExists = true;
                             option.selected = true;
                             break;
                         }
                     }
-                    if (!optionExists && config.script) {
+                    if (!optionExists) {
                         const option = document.createElement('option');
-                        option.value = config.script;
-                        option.textContent = config.script;
+                        option.value = finalScript;
+                        option.textContent = finalScript;
                         option.selected = true;
                         autoStartSelect.appendChild(option);
                     }
+                    console.log('loadCurrentConfig: Set auto-start script to:', finalScript);
                 }
             }
 
             // Store current config for later use
-            this.currentConfig = config;
+            this.currentConfig = { ...fileConfig, ...configValues };
 
-            console.log('Loaded webscreen.json config:', config);
         } catch (error) {
             console.error('Failed to load current config:', error);
         }
@@ -1368,19 +1528,11 @@ class WebScreenAdmin {
         btn.disabled = true;
 
         try {
-            // Read current config
-            const config = await this.readWebScreenConfig();
+            // Update WiFi settings using /config set commands
+            await this.serial.setConfig('wifi.ssid', ssid);
+            await this.serial.setConfig('wifi.password', password);
 
-            // Update WiFi settings
-            config.settings = config.settings || {};
-            config.settings.wifi = {
-                ssid: ssid,
-                pass: password
-            };
-
-            // Save to webscreen.json
-            await this.saveWebScreenConfig(config);
-            this.showToast('WiFi settings saved to webscreen.json', 'success');
+            this.showToast('WiFi settings saved!', 'success');
 
             // Ask if user wants to reboot to apply settings
             if (confirm('WiFi settings saved. Do you want to restart the device to connect to the new network?')) {
