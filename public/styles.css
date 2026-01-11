@@ -945,6 +945,114 @@ body {
     border-top: 1px solid var(--border-color);
 }
 
+/* Installation Progress */
+.install-progress {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--bg-color);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.progress-status {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.progress-status i {
+    color: var(--primary-color);
+    font-size: 1.25rem;
+}
+
+.progress-status.success i {
+    color: var(--success-color);
+}
+
+.progress-status.error i {
+    color: var(--danger-color);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--gradient-primary);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    padding: 0.75rem 0.5rem;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid var(--border-color);
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+
+.progress-step i {
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+.progress-step span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.progress-step.active {
+    opacity: 1;
+    border-color: var(--primary-color);
+    background: rgba(211, 16, 39, 0.05);
+}
+
+.progress-step.active i {
+    color: var(--primary-color);
+}
+
+.progress-step.active span {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+.progress-step.completed {
+    opacity: 1;
+    border-color: var(--success-color);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.progress-step.completed i {
+    color: var(--success-color);
+}
+
+.progress-step.completed span {
+    color: var(--success-color);
+}
+
 .modal-footer {
     padding: 1.5rem;
     border-top: 1px solid var(--border-color);
