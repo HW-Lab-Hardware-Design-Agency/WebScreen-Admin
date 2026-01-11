@@ -348,6 +348,20 @@
                                 </button>
                                 <input type="file" id="fileInput" multiple hidden>
                             </div>
+                            <!-- Upload Progress Overlay -->
+                            <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display: none;">
+                                <div class="upload-progress-content">
+                                    <i class="fas fa-file-upload fa-2x"></i>
+                                    <h3 id="uploadFileName">Uploading file...</h3>
+                                    <div class="upload-progress-bar-container">
+                                        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+                                    </div>
+                                    <div class="upload-progress-info">
+                                        <span id="uploadProgressPercent">0%</span>
+                                        <span id="uploadProgressBytes">0 B / 0 B</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- File Browser -->

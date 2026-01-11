@@ -379,43 +379,116 @@ class WebScreenSerial {
         });
     }
 
-    async uploadFile(filename, content) {
+    async uploadFile(filename, content, onProgress = null) {
         console.log('uploadFile: Starting upload to', filename, '- content length:', content.length);
 
-        // The device's /write command only supports .js files and auto-adds the extension
-        // Check if this is a .js file
-        if (!filename.endsWith('.js')) {
-            throw new Error('Device firmware only supports uploading .js files. Other file types are not supported.');
-        }
+        // Determine if this is a text file or binary file
+        const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        const isTextFile = textExtensions.includes(ext);
 
-        // Strip the .js extension since /write adds it automatically
-        const filenameWithoutExt = filename.replace(/\.js$/, '');
-        console.log('uploadFile: Using /write with filename:', filenameWithoutExt);
+        // Calculate total size for progress
+        let totalSize = 0;
+        let sentSize = 0;
 
-        await this.sendCommand(`/write ${filenameWithoutExt}`);
+        if (isTextFile) {
+            // Text mode - send as plain text
+            console.log('uploadFile: Using text mode for', ext);
+            totalSize = content.length;
 
-        // Wait a bit for the command to be processed
-        await new Promise(resolve => setTimeout(resolve, 200));
+            await this.sendCommand(`/upload ${filename}`);
 
-        // Send content line by line
-        const lines = content.split('\n');
-        console.log('uploadFile: Sending', lines.length, 'lines');
+            // Wait a bit for the command to be processed
+            await new Promise(resolve => setTimeout(resolve, 200));
 
-        for (let i = 0; i < lines.length; i++) {
-            await this.sendCommand(lines[i]);
-            // Small delay between lines to avoid overwhelming the device
-            await new Promise(resolve => setTimeout(resolve, 30));
+            // Send content line by line
+            const lines = content.split('\n');
+            console.log('uploadFile: Sending', lines.length, 'lines');
+
+            for (let i = 0; i < lines.length; i++) {
+                await this.sendCommand(lines[i]);
+                sentSize += lines[i].length + 1; // +1 for newline
+
+                // Report progress
+                if (onProgress) {
+                    onProgress(sentSize, totalSize);
+                }
+
+                // Small delay between lines to avoid overwhelming the device
+                await new Promise(resolve => setTimeout(resolve, 30));
+            }
+        } else {
+            // Binary mode - encode as base64
+            console.log('uploadFile: Using base64 mode for', ext);
+
+            // Get the actual binary size
+            if (typeof content === 'string') {
+                totalSize = content.length;
+            } else {
+                totalSize = content.byteLength;
+            }
+
+            await this.sendCommand(`/upload ${filename} base64`);
+
+            // Wait a bit for the command to be processed
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Convert content to base64
+            let base64Content;
+            if (typeof content === 'string') {
+                base64Content = btoa(unescape(encodeURIComponent(content)));
+            } else {
+                base64Content = this.arrayBufferToBase64(content);
+            }
+
+            // Send base64 in chunks (76 chars per line is standard)
+            const chunkSize = 76;
+            const totalChunks = Math.ceil(base64Content.length / chunkSize);
+            console.log('uploadFile: Sending', totalChunks, 'base64 chunks');
+
+            // Calculate bytes per chunk (base64 decodes to 3/4 of original size)
+            const bytesPerChunk = Math.ceil(chunkSize * 3 / 4);
+
+            for (let i = 0; i < base64Content.length; i += chunkSize) {
+                const chunk = base64Content.substring(i, i + chunkSize);
+                await this.sendCommand(chunk);
+
+                // Calculate approximate bytes sent
+                sentSize = Math.min(Math.floor((i + chunkSize) * 3 / 4), totalSize);
+
+                // Report progress
+                if (onProgress) {
+                    onProgress(sentSize, totalSize);
+                }
+
+                // Small delay between chunks
+                await new Promise(resolve => setTimeout(resolve, 20));
+            }
         }
 
         // End file write
         await new Promise(resolve => setTimeout(resolve, 100));
         await this.sendCommand('END');
 
+        // Final progress update
+        if (onProgress) {
+            onProgress(totalSize, totalSize);
+        }
+
         // Wait for file to be finalized
         await new Promise(resolve => setTimeout(resolve, 200));
 
         console.log('uploadFile: Upload complete for', filename);
         return true;
+    }
+
+    arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        for (let i = 0; i < bytes.length; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
     }
 
     async deleteFile(filename) {
@@ -504,6 +577,35 @@ class WebScreenSerial {
     async loadApp(filename) {
         await this.sendCommand(`/load ${filename}`);
         return true;
+    }
+
+    async getHelp() {
+        return new Promise((resolve) => {
+            let helpText = '';
+            let collecting = false;
+            const collectorId = 'help_' + Date.now();
+
+            const collector = (line) => {
+                // Start collecting when we see help header or command list
+                if (line.includes('Available commands') || line.includes('Commands:') || line.includes('/help')) {
+                    collecting = true;
+                }
+
+                if (collecting) {
+                    helpText += line + '\n';
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand('/help');
+
+            // Timeout after 3 seconds
+            setTimeout(() => {
+                this.activeCollectors.delete(collectorId);
+                console.log('getHelp output:', helpText);
+                resolve(helpText);
+            }, 3000);
+        });
     }
 
     async reboot() {

@@ -1252,15 +1252,30 @@ class WebScreenAdmin {
 
         for (const file of files) {
             try {
-                this.showToast(`Uploading ${file.name}...`, 'info');
-                const content = await this.readFileFromBrowser(file);
+                // Show upload progress overlay
+                this.showUploadProgress(file.name, 0, file.size);
+
+                // Determine if file is text or binary based on extension
+                const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
+                const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                const isTextFile = textExtensions.includes(ext);
+
+                const content = await this.readFileFromBrowser(file, !isTextFile);
+
                 // Include current path in filename
                 const fullPath = this.currentPath + file.name;
-                console.log('Uploading file to:', fullPath);
-                await this.serial.uploadFile(fullPath, content);
+                console.log('Uploading file to:', fullPath, 'binary:', !isTextFile);
+
+                // Upload with progress callback
+                await this.serial.uploadFile(fullPath, content, (sent, total) => {
+                    this.updateUploadProgress(file.name, sent, total);
+                });
+
+                this.hideUploadProgress();
                 this.showToast(`${file.name} uploaded successfully`, 'success');
             } catch (error) {
                 console.error('Upload error:', error);
+                this.hideUploadProgress();
                 this.showToast(`Failed to upload ${file.name}: ${error.message}`, 'error');
             }
         }
@@ -1269,12 +1284,54 @@ class WebScreenAdmin {
         await this.refreshFiles();
     }
 
-    readFileFromBrowser(file) {
+    showUploadProgress(filename, sent, total) {
+        const overlay = document.getElementById('uploadProgressOverlay');
+        const fileNameEl = document.getElementById('uploadFileName');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const percentEl = document.getElementById('uploadProgressPercent');
+        const bytesEl = document.getElementById('uploadProgressBytes');
+
+        overlay.style.display = 'flex';
+        fileNameEl.textContent = `Uploading ${filename}...`;
+        progressBar.style.width = '0%';
+        percentEl.textContent = '0%';
+        bytesEl.textContent = `0 B / ${this.formatBytes(total)}`;
+    }
+
+    updateUploadProgress(filename, sent, total) {
+        const progressBar = document.getElementById('uploadProgressBar');
+        const percentEl = document.getElementById('uploadProgressPercent');
+        const bytesEl = document.getElementById('uploadProgressBytes');
+
+        const percent = total > 0 ? Math.round((sent / total) * 100) : 0;
+        progressBar.style.width = `${percent}%`;
+        percentEl.textContent = `${percent}%`;
+        bytesEl.textContent = `${this.formatBytes(sent)} / ${this.formatBytes(total)}`;
+    }
+
+    hideUploadProgress() {
+        const overlay = document.getElementById('uploadProgressOverlay');
+        overlay.style.display = 'none';
+    }
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    readFileFromBrowser(file, asBinary = false) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
             reader.onerror = (e) => reject(new Error('Failed to read file'));
-            reader.readAsText(file);
+            if (asBinary) {
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.readAsText(file);
+            }
         });
     }
 
