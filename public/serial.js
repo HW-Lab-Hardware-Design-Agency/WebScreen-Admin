@@ -10,6 +10,8 @@ class WebScreenSerial {
         this.activeCollectors = new Map(); // For multi-line response collection
         this.onStatusChange = null;
         this.onDataReceived = null;
+        this.firmwareVersion = null; // Cache firmware version for capability detection
+        this.supportsUploadCommand = null; // null = unknown, true/false = detected
     }
 
     // Connect to WebScreen device
@@ -167,6 +169,9 @@ class WebScreenSerial {
                         info.sdkVersion = line.split(':')[1].trim();
                     } else if (line.includes('WebScreen Version:')) {
                         info.firmwareVersion = line.split(':')[1].trim();
+                        // Cache firmware version for capability detection
+                        this.firmwareVersion = info.firmwareVersion;
+                        this.supportsUploadCommand = this.checkUploadCommandSupport(info.firmwareVersion);
                     } else if (line.includes('Build Date:')) {
                         info.buildDate = line.split(':').slice(1).join(':').trim();
                         // Build Date is the last info line
@@ -189,6 +194,86 @@ class WebScreenSerial {
                 }
             }, 5000);
         });
+    }
+
+    // Check if firmware version supports the /upload command
+    // /upload command was added in firmware version 2.0.0
+    checkUploadCommandSupport(version) {
+        if (!version) return false;
+
+        // Parse version string (e.g., "2.0.0" or "1.5.2")
+        const parts = version.split('.').map(p => parseInt(p, 10));
+        const major = parts[0] || 0;
+        const minor = parts[1] || 0;
+        const patch = parts[2] || 0;
+
+        // /upload command is available from version 2.0.0 onwards
+        if (major > 2) return true;
+        if (major === 2 && (minor > 0 || patch >= 0)) return true;
+        return false;
+    }
+
+    // Fallback upload method for older firmware using /write command
+    // Only works for .js files
+    async uploadFileUsingWrite(filename, content, onProgress = null) {
+        console.log('uploadFileUsingWrite: Using legacy /write command for', filename);
+
+        // /write command only works for .js files
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        if (ext !== '.js') {
+            throw new Error(`Legacy firmware only supports .js files via /write command. Cannot upload ${ext} files. Please upgrade your WebScreen firmware to version 2.0.0 or later.`);
+        }
+
+        // Calculate total size for progress
+        const totalSize = content.length;
+        let sentSize = 0;
+
+        // Remove leading slash if present for the /write command
+        let writeFilename = filename;
+        if (writeFilename.startsWith('/')) {
+            writeFilename = writeFilename.substring(1);
+        }
+        // Remove .js extension since /write adds it automatically
+        if (writeFilename.endsWith('.js')) {
+            writeFilename = writeFilename.substring(0, writeFilename.length - 3);
+        }
+
+        await this.sendCommand(`/write ${writeFilename}`);
+
+        // Wait a bit for the command to be processed
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Send content line by line
+        const lines = content.split('\n');
+        console.log('uploadFileUsingWrite: Sending', lines.length, 'lines');
+
+        for (let i = 0; i < lines.length; i++) {
+            await this.sendCommand(lines[i]);
+            sentSize += lines[i].length + 1; // +1 for newline
+
+            // Report progress
+            if (onProgress) {
+                onProgress(sentSize, totalSize);
+            }
+
+            // Small delay between lines to avoid overwhelming the device
+            await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        // End file write
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await this.sendCommand('END');
+
+        // Final progress update
+        if (onProgress) {
+            onProgress(totalSize, totalSize);
+        }
+
+        // Wait for file to be finalized
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        console.log('uploadFileUsingWrite: Upload complete for', filename);
+        return true;
     }
 
     async getStats() {
@@ -382,9 +467,35 @@ class WebScreenSerial {
     async uploadFile(filename, content, onProgress = null) {
         console.log('uploadFile: Starting upload to', filename, '- content length:', content.length);
 
+        // Check if we need to use legacy /write command for older firmware
+        // supportsUploadCommand: true = firmware 2.0.0+, false = older firmware, null = unknown
+        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+
+        if (this.supportsUploadCommand === true) {
+            // Firmware 2.0.0+ supports /upload command, proceed normally
+            console.log('uploadFile: Using /upload command (firmware 2.0.0+)');
+        } else if (this.supportsUploadCommand === false) {
+            // Old firmware - use /write for .js files only
+            if (ext === '.js') {
+                console.log('uploadFile: Old firmware detected, using legacy /write method');
+                return await this.uploadFileUsingWrite(filename, content, onProgress);
+            } else {
+                // Non-.js file on old firmware - not supported
+                throw new Error(`Your WebScreen firmware (${this.firmwareVersion || 'unknown'}) does not support uploading ${ext} files. Please upgrade to firmware version 2.0.0 or later.`);
+            }
+        } else {
+            // supportsUploadCommand is null (firmware version unknown)
+            // Be conservative: use legacy /write for .js files
+            if (ext === '.js') {
+                console.log('uploadFile: Firmware version unknown, using legacy /write method for safety');
+                return await this.uploadFileUsingWrite(filename, content, onProgress);
+            }
+            // For non-.js files with unknown firmware, try /upload but warn
+            console.log('uploadFile: Firmware version unknown, attempting /upload command for', ext, 'file');
+        }
+
         // Determine if this is a text file or binary file
         const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
-        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
         const isTextFile = textExtensions.includes(ext);
 
         // Calculate total size for progress
