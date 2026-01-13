@@ -38,6 +38,9 @@ class WebScreenAdmin {
             return;
         }
 
+        // Initialize theme
+        this.setupTheme();
+
         // Initialize terminal
         this.initTerminal();
 
@@ -49,6 +52,51 @@ class WebScreenAdmin {
 
         // Initialize sections
         this.initializeSections();
+    }
+
+    setupTheme() {
+        // Load saved theme from localStorage
+        const savedTheme = localStorage.getItem('webscreen-admin-theme') || 'light';
+        this.currentTheme = savedTheme;
+
+        // Apply theme
+        this.applyTheme(savedTheme);
+
+        // Setup theme toggle button
+        const themeToggle = document.getElementById('themeToggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const newTheme = this.currentTheme === 'light' ? 'eva' : 'light';
+                this.applyTheme(newTheme);
+                localStorage.setItem('webscreen-admin-theme', newTheme);
+            });
+        }
+    }
+
+    applyTheme(theme) {
+        this.currentTheme = theme;
+
+        const themeToggle = document.getElementById('themeToggle');
+        const icon = themeToggle?.querySelector('i');
+        const label = themeToggle?.querySelector('.theme-label');
+
+        if (theme === 'eva') {
+            document.documentElement.setAttribute('data-theme', 'eva');
+            if (icon) {
+                icon.className = 'fas fa-robot';
+            }
+            if (label) {
+                label.textContent = 'EVA';
+            }
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            if (icon) {
+                icon.className = 'fas fa-sun';
+            }
+            if (label) {
+                label.textContent = 'Light';
+            }
+        }
     }
 
     initTerminal() {
