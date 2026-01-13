@@ -1060,29 +1060,92 @@ class WebScreenAdmin {
             progressText.textContent = message;
         };
 
+        // Get the base URL for this app's folder
+        const getAppBaseUrl = () => {
+            // Extract base URL from main_file (remove script.js from the end)
+            const mainFile = app.main_file;
+            return mainFile.substring(0, mainFile.lastIndexOf('/') + 1);
+        };
+
         try {
-            // Step 1: Download app code from GitHub
+            // Step 1: Fetch app.json to get assets list, then download app code
+            updateProgress(1, 5, 'Fetching app configuration...');
+
+            const baseUrl = getAppBaseUrl();
+            const appJsonUrl = baseUrl + 'app.json';
+            let assets = [];
+
+            try {
+                const appJsonResponse = await fetch(appJsonUrl);
+                if (appJsonResponse.ok) {
+                    const appConfig = await appJsonResponse.json();
+                    assets = appConfig.assets || [];
+                    console.log(`Found ${assets.length} assets for ${app.name}:`, assets);
+                }
+            } catch (e) {
+                console.log('Could not fetch app.json, proceeding without assets:', e);
+            }
+
             updateProgress(1, 10, 'Downloading app from GitHub...');
             const response = await fetch(app.main_file);
             if (!response.ok) {
                 throw new Error('Failed to download app from GitHub');
             }
             const code = await response.text();
-            updateProgress(1, 25, 'Download complete');
+            updateProgress(1, 20, 'Download complete');
 
-            // Step 2: Upload script to SD card
-            updateProgress(2, 30, 'Uploading to SD card...');
+            // Step 2: Download and upload assets (if any)
+            if (assets.length > 0) {
+                updateProgress(2, 25, `Downloading ${assets.length} asset(s)...`);
+
+                for (let i = 0; i < assets.length; i++) {
+                    const assetName = assets[i];
+                    const assetUrl = baseUrl + assetName;
+                    const progressPercent = 25 + (i / assets.length) * 20;
+
+                    updateProgress(2, progressPercent, `Downloading ${assetName}...`);
+
+                    try {
+                        const assetResponse = await fetch(assetUrl);
+                        if (!assetResponse.ok) {
+                            console.warn(`Failed to download asset: ${assetName}`);
+                            continue;
+                        }
+
+                        // Determine if asset is binary or text
+                        const ext = assetName.substring(assetName.lastIndexOf('.')).toLowerCase();
+                        const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md', '.pem'];
+                        const isTextFile = textExtensions.includes(ext);
+
+                        let assetContent;
+                        if (isTextFile) {
+                            assetContent = await assetResponse.text();
+                        } else {
+                            assetContent = await assetResponse.arrayBuffer();
+                        }
+
+                        updateProgress(2, progressPercent + 5, `Uploading ${assetName}...`);
+                        await this.serial.uploadFile('/' + assetName, assetContent);
+                        console.log(`Uploaded asset: ${assetName}`);
+
+                    } catch (assetError) {
+                        console.warn(`Error processing asset ${assetName}:`, assetError);
+                    }
+                }
+
+                updateProgress(2, 45, 'Assets uploaded');
+            }
+
+            // Step 3: Upload script to SD card
+            updateProgress(3, 50, 'Uploading script to SD card...');
             const scriptFilename = `${app.id}.js`;
             await this.serial.uploadFile(scriptFilename, code);
-            updateProgress(2, 60, 'Upload complete');
+            updateProgress(3, 65, 'Script uploaded');
 
-            // Step 3: Update the script setting in config
-            updateProgress(3, 65, 'Updating configuration...');
+            // Step 4: Update the script setting in config
+            updateProgress(4, 70, 'Updating configuration...');
             await this.serial.setConfig('script', scriptFilename);
-            updateProgress(3, 80, 'Configuration saved');
-
-            // Step 4: Restart device
-            updateProgress(4, 85, `${app.name} installed! Restarting device...`);
+            updateProgress(4, 85, 'Configuration saved');
 
             // Mark all steps as completed
             for (let i = 1; i <= 4; i++) {

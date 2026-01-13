@@ -12,6 +12,7 @@ class WebScreenSerial {
         this.onDataReceived = null;
         this.firmwareVersion = null; // Cache firmware version for capability detection
         this.supportsUploadCommand = null; // null = unknown, true/false = detected
+        this.isUploading = false; // Lock to prevent concurrent uploads
     }
 
     // Connect to WebScreen device
@@ -216,64 +217,73 @@ class WebScreenSerial {
     // Fallback upload method for older firmware using /write command
     // Only works for .js files
     async uploadFileUsingWrite(filename, content, onProgress = null) {
+        // Check for concurrent upload
+        if (this.isUploading) {
+            throw new Error('Another upload is in progress. Please wait.');
+        }
+        this.isUploading = true;
         console.log('uploadFileUsingWrite: Using legacy /write command for', filename);
 
-        // /write command only works for .js files
-        const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
-        if (ext !== '.js') {
-            throw new Error(`Legacy firmware only supports .js files via /write command. Cannot upload ${ext} files. Please upgrade your WebScreen firmware to version 2.0.0 or later.`);
-        }
-
-        // Calculate total size for progress
-        const totalSize = content.length;
-        let sentSize = 0;
-
-        // Remove leading slash if present for the /write command
-        let writeFilename = filename;
-        if (writeFilename.startsWith('/')) {
-            writeFilename = writeFilename.substring(1);
-        }
-        // Remove .js extension since /write adds it automatically
-        if (writeFilename.endsWith('.js')) {
-            writeFilename = writeFilename.substring(0, writeFilename.length - 3);
-        }
-
-        await this.sendCommand(`/write ${writeFilename}`);
-
-        // Wait a bit for the command to be processed
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Send content line by line
-        const lines = content.split('\n');
-        console.log('uploadFileUsingWrite: Sending', lines.length, 'lines');
-
-        for (let i = 0; i < lines.length; i++) {
-            await this.sendCommand(lines[i]);
-            sentSize += lines[i].length + 1; // +1 for newline
-
-            // Report progress
-            if (onProgress) {
-                onProgress(sentSize, totalSize);
+        try {
+            // /write command only works for .js files
+            const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+            if (ext !== '.js') {
+                throw new Error(`Legacy firmware only supports .js files via /write command. Cannot upload ${ext} files. Please upgrade your WebScreen firmware to version 2.0.0 or later.`);
             }
 
-            // Small delay between lines to avoid overwhelming the device
-            await new Promise(resolve => setTimeout(resolve, 30));
+            // Calculate total size for progress
+            const totalSize = content.length;
+            let sentSize = 0;
+
+            // Remove leading slash if present for the /write command
+            let writeFilename = filename;
+            if (writeFilename.startsWith('/')) {
+                writeFilename = writeFilename.substring(1);
+            }
+            // Remove .js extension since /write adds it automatically
+            if (writeFilename.endsWith('.js')) {
+                writeFilename = writeFilename.substring(0, writeFilename.length - 3);
+            }
+
+            await this.sendCommand(`/write ${writeFilename}`);
+
+            // Wait a bit for the command to be processed
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Send content line by line
+            const lines = content.split('\n');
+            console.log('uploadFileUsingWrite: Sending', lines.length, 'lines');
+
+            for (let i = 0; i < lines.length; i++) {
+                await this.sendCommand(lines[i]);
+                sentSize += lines[i].length + 1; // +1 for newline
+
+                // Report progress
+                if (onProgress) {
+                    onProgress(sentSize, totalSize);
+                }
+
+                // Small delay between lines to avoid overwhelming the device
+                await new Promise(resolve => setTimeout(resolve, 30));
+            }
+
+            // End file write
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await this.sendCommand('END');
+
+            // Final progress update
+            if (onProgress) {
+                onProgress(totalSize, totalSize);
+            }
+
+            // Wait for file to be finalized
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            console.log('uploadFileUsingWrite: Upload complete for', filename);
+            return true;
+        } finally {
+            this.isUploading = false;
         }
-
-        // End file write
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await this.sendCommand('END');
-
-        // Final progress update
-        if (onProgress) {
-            onProgress(totalSize, totalSize);
-        }
-
-        // Wait for file to be finalized
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        console.log('uploadFileUsingWrite: Upload complete for', filename);
-        return true;
     }
 
     async getStats() {
@@ -494,103 +504,113 @@ class WebScreenSerial {
             console.log('uploadFile: Firmware version unknown, attempting /upload command for', ext, 'file');
         }
 
-        // Determine if this is a text file or binary file
-        const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
-        const isTextFile = textExtensions.includes(ext);
+        // Check for concurrent upload (for /upload command path)
+        if (this.isUploading) {
+            throw new Error('Another upload is in progress. Please wait.');
+        }
+        this.isUploading = true;
 
-        // Calculate total size for progress
-        let totalSize = 0;
-        let sentSize = 0;
+        try {
+            // Determine if this is a text file or binary file
+            const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md'];
+            const isTextFile = textExtensions.includes(ext);
 
-        if (isTextFile) {
-            // Text mode - send as plain text
-            console.log('uploadFile: Using text mode for', ext);
-            totalSize = content.length;
+            // Calculate total size for progress
+            let totalSize = 0;
+            let sentSize = 0;
 
-            await this.sendCommand(`/upload ${filename}`);
-
-            // Wait a bit for the command to be processed
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Send content line by line
-            const lines = content.split('\n');
-            console.log('uploadFile: Sending', lines.length, 'lines');
-
-            for (let i = 0; i < lines.length; i++) {
-                await this.sendCommand(lines[i]);
-                sentSize += lines[i].length + 1; // +1 for newline
-
-                // Report progress
-                if (onProgress) {
-                    onProgress(sentSize, totalSize);
-                }
-
-                // Small delay between lines to avoid overwhelming the device
-                await new Promise(resolve => setTimeout(resolve, 30));
-            }
-        } else {
-            // Binary mode - encode as base64
-            console.log('uploadFile: Using base64 mode for', ext);
-
-            // Get the actual binary size
-            if (typeof content === 'string') {
+            if (isTextFile) {
+                // Text mode - send as plain text
+                console.log('uploadFile: Using text mode for', ext);
                 totalSize = content.length;
+
+                await this.sendCommand(`/upload ${filename}`);
+
+                // Wait a bit for the command to be processed
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Send content line by line
+                const lines = content.split('\n');
+                console.log('uploadFile: Sending', lines.length, 'lines');
+
+                for (let i = 0; i < lines.length; i++) {
+                    await this.sendCommand(lines[i]);
+                    sentSize += lines[i].length + 1; // +1 for newline
+
+                    // Report progress
+                    if (onProgress) {
+                        onProgress(sentSize, totalSize);
+                    }
+
+                    // Small delay between lines to avoid overwhelming the device
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                }
             } else {
-                totalSize = content.byteLength;
-            }
+                // Binary mode - encode as base64
+                console.log('uploadFile: Using base64 mode for', ext);
 
-            await this.sendCommand(`/upload ${filename} base64`);
-
-            // Wait a bit for the command to be processed
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Convert content to base64
-            let base64Content;
-            if (typeof content === 'string') {
-                base64Content = btoa(unescape(encodeURIComponent(content)));
-            } else {
-                base64Content = this.arrayBufferToBase64(content);
-            }
-
-            // Send base64 in chunks (76 chars per line is standard)
-            const chunkSize = 76;
-            const totalChunks = Math.ceil(base64Content.length / chunkSize);
-            console.log('uploadFile: Sending', totalChunks, 'base64 chunks');
-
-            // Calculate bytes per chunk (base64 decodes to 3/4 of original size)
-            const bytesPerChunk = Math.ceil(chunkSize * 3 / 4);
-
-            for (let i = 0; i < base64Content.length; i += chunkSize) {
-                const chunk = base64Content.substring(i, i + chunkSize);
-                await this.sendCommand(chunk);
-
-                // Calculate approximate bytes sent
-                sentSize = Math.min(Math.floor((i + chunkSize) * 3 / 4), totalSize);
-
-                // Report progress
-                if (onProgress) {
-                    onProgress(sentSize, totalSize);
+                // Get the actual binary size
+                if (typeof content === 'string') {
+                    totalSize = content.length;
+                } else {
+                    totalSize = content.byteLength;
                 }
 
-                // Small delay between chunks
-                await new Promise(resolve => setTimeout(resolve, 20));
+                await this.sendCommand(`/upload ${filename} base64`);
+
+                // Wait a bit for the command to be processed
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Convert content to base64
+                let base64Content;
+                if (typeof content === 'string') {
+                    base64Content = btoa(unescape(encodeURIComponent(content)));
+                } else {
+                    base64Content = this.arrayBufferToBase64(content);
+                }
+
+                // Send base64 in chunks (76 chars per line is standard)
+                const chunkSize = 76;
+                const totalChunks = Math.ceil(base64Content.length / chunkSize);
+                console.log('uploadFile: Sending', totalChunks, 'base64 chunks');
+
+                // Calculate bytes per chunk (base64 decodes to 3/4 of original size)
+                const bytesPerChunk = Math.ceil(chunkSize * 3 / 4);
+
+                for (let i = 0; i < base64Content.length; i += chunkSize) {
+                    const chunk = base64Content.substring(i, i + chunkSize);
+                    await this.sendCommand(chunk);
+
+                    // Calculate approximate bytes sent
+                    sentSize = Math.min(Math.floor((i + chunkSize) * 3 / 4), totalSize);
+
+                    // Report progress
+                    if (onProgress) {
+                        onProgress(sentSize, totalSize);
+                    }
+
+                    // Small delay between chunks
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                }
             }
+
+            // End file write
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await this.sendCommand('END');
+
+            // Final progress update
+            if (onProgress) {
+                onProgress(totalSize, totalSize);
+            }
+
+            // Wait for file to be finalized
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            console.log('uploadFile: Upload complete for', filename);
+            return true;
+        } finally {
+            this.isUploading = false;
         }
-
-        // End file write
-        await new Promise(resolve => setTimeout(resolve, 100));
-        await this.sendCommand('END');
-
-        // Final progress update
-        if (onProgress) {
-            onProgress(totalSize, totalSize);
-        }
-
-        // Wait for file to be finalized
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        console.log('uploadFile: Upload complete for', filename);
-        return true;
     }
 
     arrayBufferToBase64(buffer) {
