@@ -872,6 +872,42 @@ class WebScreenSerial {
         return true;
     }
 
+    // Sync device time
+    // epoch: Unix timestamp in seconds
+    // timezone: Optional timezone string (e.g., "America/New_York" or "UTC0")
+    async syncTime(epoch, timezone = null) {
+        return new Promise((resolve) => {
+            let success = false;
+            const collectorId = 'settime_' + Date.now();
+
+            const collector = (line) => {
+                if (line.includes('Time set successfully') || line.includes('Device time synchronized')) {
+                    success = true;
+                    this.activeCollectors.delete(collectorId);
+                    resolve(true);
+                } else if (line.includes('[ERROR]') || line.includes('Failed')) {
+                    this.activeCollectors.delete(collectorId);
+                    resolve(false);
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+
+            // Send command with optional timezone
+            const cmd = timezone ? `/settime ${epoch} ${timezone}` : `/settime ${epoch}`;
+            this.sendCommand(cmd);
+            console.log('syncTime: Sent', cmd);
+
+            // Timeout after 3 seconds
+            setTimeout(() => {
+                if (!success) {
+                    this.activeCollectors.delete(collectorId);
+                    resolve(true); // Assume success if no error received
+                }
+            }, 3000);
+        });
+    }
+
     // Helper to parse device info
     parseDeviceInfo(line) {
         const info = {};

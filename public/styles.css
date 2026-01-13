@@ -737,6 +737,355 @@ body {
     color: var(--primary-color);
 }
 
+/* Dynamic Config - Modern Settings Form */
+.settings-container {
+    max-width: 720px;
+}
+
+.settings-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 4rem 2rem;
+    color: var(--text-secondary);
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+}
+
+.settings-loading i {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.settings-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 2rem;
+}
+
+.settings-actions .btn {
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+}
+
+/* Config Section Card */
+.config-section {
+    background: white;
+    border-radius: 16px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
+.config-section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0;
+    padding: 1.25rem 1.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.config-section-title i {
+    color: var(--primary-color);
+    font-size: 0.85rem;
+    width: 20px;
+    text-align: center;
+}
+
+/* Config Fields */
+.config-section-fields {
+    padding: 0;
+}
+
+.config-field {
+    padding: 1rem 1.5rem;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    border-top: 1px solid #f3f4f6;
+    transition: background-color 0.15s ease;
+}
+
+.config-field:first-child {
+    border-top: none;
+}
+
+.config-field:hover {
+    background-color: #f9fafb;
+}
+
+.config-field > label:first-child {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    text-transform: none;
+    letter-spacing: normal;
+    margin: 0;
+    flex-shrink: 0;
+    min-width: 120px;
+}
+
+.config-field .form-control {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    transition: all 0.15s ease;
+    width: 100%;
+    max-width: 280px;
+}
+
+.config-field .form-control:hover {
+    border-color: #d1d5db;
+}
+
+.config-field .form-control:focus {
+    background: white;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(234, 56, 77, 0.12);
+    outline: none;
+}
+
+/* Input with detect button */
+.input-with-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 320px;
+    width: 100%;
+}
+
+.input-with-button .form-control {
+    flex: 1;
+    max-width: none;
+}
+
+.btn-detect {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.btn-detect i {
+    font-size: 0.75rem;
+}
+
+/* Config field with action button */
+.config-field-actions {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.config-field-actions .btn {
+    min-width: 180px;
+}
+
+/* Time input styling */
+.config-field input[type="time"],
+.config-field input[type="date"] {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Color Picker Field */
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 280px;
+    width: 100%;
+}
+
+.color-picker-input {
+    width: 42px;
+    height: 36px;
+    padding: 2px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    background: white;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.color-picker-input:hover {
+    border-color: #d1d5db;
+}
+
+.color-picker-input:focus {
+    border-color: var(--primary-color);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(234, 56, 77, 0.12);
+}
+
+.color-picker-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 5px;
+}
+
+.color-hex-input {
+    flex: 1;
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    max-width: none;
+}
+
+/* Boolean Toggle */
+.config-field .toggle-switch {
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #e5e7eb;
+    transition: all 0.2s ease;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: all 0.2s ease;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch:hover .toggle-slider {
+    background-color: #d1d5db;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--primary-color);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Password field in config */
+.config-field .password-input {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    max-width: 280px;
+    width: 100%;
+}
+
+.config-field .password-input .form-control {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    flex: 1;
+    max-width: none;
+}
+
+.config-field .password-input .btn-icon {
+    border: 1px solid #e5e7eb;
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    height: 36px;
+    width: 36px;
+    background: #f9fafb;
+    color: #9ca3af;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.config-field .password-input .btn-icon:hover {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+/* Empty Config State */
+.config-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    color: var(--text-secondary);
+    background: white;
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.config-empty i {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #d1d5db;
+}
+
+.config-empty p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+/* Loading Spinner for Modal */
+.loading-spinner-modal {
+    width: 56px;
+    height: 56px;
+    border: 4px solid #f0f2f5;
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 /* Network */
 .network-container {
     display: grid;
@@ -1343,5 +1692,54 @@ body {
 
     .apps-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+
+    .settings-container {
+        max-width: 100%;
+    }
+
+    .settings-actions {
+        flex-direction: column;
+    }
+
+    .settings-actions .btn {
+        width: 100%;
+    }
+
+    .config-section {
+        border-radius: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .config-section-title {
+        padding: 1rem 1rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    .config-field {
+        padding: 0.875rem 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .config-field > label:first-child {
+        min-width: auto;
+    }
+
+    .config-field .form-control,
+    .color-picker-wrapper,
+    .config-field .password-input,
+    .input-with-button {
+        max-width: 100%;
+    }
+
+    .input-with-button {
+        flex-wrap: wrap;
+    }
+
+    .btn-detect {
+        width: 100%;
+        justify-content: center;
     }
 }

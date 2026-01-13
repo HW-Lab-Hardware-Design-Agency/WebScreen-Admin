@@ -20,6 +20,10 @@ class WebScreenAdmin {
         this.historyIndex = -1;
         this.currentInput = '';
 
+        // Loading overlay state
+        this.waitingForScriptExecution = false;
+        this.scriptExecutionTimeout = null;
+
         // Bind serial callbacks
         this.serial.onStatusChange = (connected) => this.handleConnectionChange(connected);
         this.serial.onDataReceived = (data) => this.handleSerialData(data);
@@ -242,6 +246,7 @@ class WebScreenAdmin {
 
         // Settings
         document.getElementById('saveSystemBtn')?.addEventListener('click', () => this.saveSystemSettings());
+        document.getElementById('reloadConfigBtn')?.addEventListener('click', () => this.reloadConfig());
 
         // Network
         document.getElementById('connectWifiBtn')?.addEventListener('click', () => this.connectWiFi());
@@ -356,6 +361,31 @@ class WebScreenAdmin {
             // Convert newlines and write to terminal
             const formattedData = data.replace(/\n/g, '\r\n');
             this.terminal.write(formattedData + '\r\n');
+        }
+
+        // Check if we're waiting for script execution
+        if (this.waitingForScriptExecution) {
+            // Look for success messages from the device
+            // The firmware may output various messages when script starts/completes
+            const successPatterns = [
+                'JavaScript script executed successfully',
+                'Script executed successfully',
+                'Starting JavaScript execution',
+                'JavaScript execution',
+                'script executed',
+                'Elk JS',
+                'JS execution complete'
+            ];
+
+            const lowerData = data.toLowerCase();
+            const matched = successPatterns.some(pattern =>
+                lowerData.includes(pattern.toLowerCase())
+            );
+
+            if (matched) {
+                console.log('Script execution detected, hiding loading modal');
+                this.hideLoadingModal();
+            }
         }
     }
 
@@ -1158,23 +1188,29 @@ class WebScreenAdmin {
 
             // Wait a moment for the user to see the success message, then reboot
             await new Promise(resolve => setTimeout(resolve, 1500));
-            await this.serial.reboot();
 
-            // Close modal after a brief delay
-            setTimeout(() => {
-                this.closeModal();
-                // Reset progress UI for next time
-                installBtn.style.display = '';
-                cancelBtn.style.display = '';
-                progressEl.style.display = 'none';
-                progressStatus.classList.remove('success');
-                progressIcon.classList.remove('fa-check-circle');
-                progressIcon.classList.add('fa-spinner', 'fa-spin');
-                progressBar.style.width = '0%';
-                for (let i = 1; i <= 4; i++) {
-                    document.getElementById(`step${i}`).classList.remove('active', 'completed');
-                }
-            }, 2000);
+            // Close modal and show global loading overlay
+            this.closeModal();
+            // Reset progress UI for next time
+            installBtn.style.display = '';
+            cancelBtn.style.display = '';
+            progressEl.style.display = 'none';
+            progressStatus.classList.remove('success');
+            progressIcon.classList.remove('fa-check-circle');
+            progressIcon.classList.add('fa-spinner', 'fa-spin');
+            progressBar.style.width = '0%';
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`step${i}`).classList.remove('active', 'completed');
+            }
+
+            // Show loading modal
+            this.showLoadingModal(
+                'Starting ' + app.name,
+                'Device is restarting and loading your app...'
+            );
+
+            // Reboot the device
+            await this.serial.reboot();
 
         } catch (error) {
             console.error('Failed to install app:', error);
@@ -1443,20 +1479,51 @@ class WebScreenAdmin {
         btn.disabled = true;
 
         try {
-            const deviceName = document.getElementById('deviceName').value;
-            const autoStart = document.getElementById('autoStart').value;
-            const timezone = document.getElementById('timezone').value;
+            // Collect all values from dynamic config fields
+            const container = document.getElementById('dynamicConfigContainer');
+            const updatedConfig = JSON.parse(JSON.stringify(this.currentConfig || {}));
 
-            // Update settings using /config set commands
-            if (deviceName) {
-                await this.serial.setConfig('device.name', deviceName);
-            }
-            if (autoStart) {
-                await this.serial.setConfig('script', autoStart);
-            }
-            if (timezone) {
-                await this.serial.setConfig('timezone', timezone);
-            }
+            // Helper to set nested value in object
+            const setNestedValue = (obj, path, value) => {
+                const keys = path.split('.');
+                let current = obj;
+                for (let i = 0; i < keys.length - 1; i++) {
+                    if (!current[keys[i]]) {
+                        current[keys[i]] = {};
+                    }
+                    current = current[keys[i]];
+                }
+                current[keys[keys.length - 1]] = value;
+            };
+
+            // Collect values from all config inputs
+            container.querySelectorAll('[data-config-path]').forEach(input => {
+                const path = input.dataset.configPath;
+
+                // Skip color picker inputs (we use the hex input instead)
+                if (input.classList.contains('color-picker-input')) {
+                    return;
+                }
+
+                let value;
+                if (input.type === 'checkbox') {
+                    value = input.checked;
+                } else if (input.type === 'number') {
+                    value = parseFloat(input.value) || 0;
+                } else {
+                    value = input.value;
+                }
+
+                setNestedValue(updatedConfig, path, value);
+            });
+
+            console.log('Saving updated config:', updatedConfig);
+
+            // Save the updated configuration to webscreen.json
+            await this.saveWebScreenConfig(updatedConfig);
+
+            // Update the stored config
+            this.currentConfig = updatedConfig;
 
             this.showToast('Settings saved!', 'success');
 
@@ -1617,8 +1684,448 @@ class WebScreenAdmin {
             // Store current config for later use
             this.currentConfig = { ...fileConfig, ...configValues };
 
+            // Render the dynamic config UI
+            this.renderDynamicConfig(fileConfig);
+
         } catch (error) {
             console.error('Failed to load current config:', error);
+        }
+    }
+
+    // Reload configuration from device
+    async reloadConfig() {
+        if (!this.serial.connected || !this.sdCardAvailable) {
+            this.showToast('Device not connected or SD card not available', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('reloadConfigBtn');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
+        btn.disabled = true;
+
+        try {
+            await this.loadCurrentConfig();
+            this.showToast('Configuration reloaded', 'success');
+        } catch (error) {
+            console.error('Failed to reload config:', error);
+            this.showToast('Failed to reload configuration', 'error');
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    }
+
+    // Render dynamic configuration fields from JSON config
+    renderDynamicConfig(config) {
+        const container = document.getElementById('dynamicConfigContainer');
+        if (!container) return;
+
+        // Clear loading state
+        container.innerHTML = '';
+
+        // Helper to determine if a value looks like a color
+        const isColorValue = (value) => {
+            if (typeof value !== 'string') return false;
+            return /^#[0-9A-Fa-f]{6}$/.test(value) || /^#[0-9A-Fa-f]{3}$/.test(value);
+        };
+
+        // Helper to create a form field based on value type
+        const createField = (key, value, path = '') => {
+            const fullPath = path ? `${path}.${key}` : key;
+            const fieldId = `config-${fullPath.replace(/\./g, '-')}`;
+            const labelText = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+
+            let fieldHtml = '';
+
+            if (typeof value === 'boolean') {
+                // Toggle switch for booleans
+                fieldHtml = `
+                    <div class="config-field">
+                        <label for="${fieldId}">${labelText}</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="${fieldId}" data-config-path="${fullPath}" ${value ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                `;
+            } else if (typeof value === 'number') {
+                // Number input
+                fieldHtml = `
+                    <div class="config-field">
+                        <label for="${fieldId}">${labelText}</label>
+                        <input type="number" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}">
+                    </div>
+                `;
+            } else if (typeof value === 'string') {
+                if (isColorValue(value)) {
+                    // Color picker for color values
+                    fieldHtml = `
+                        <div class="config-field">
+                            <label for="${fieldId}">${labelText}</label>
+                            <div class="color-picker-wrapper">
+                                <input type="color" id="${fieldId}-picker" class="color-picker-input" data-config-path="${fullPath}" value="${value}">
+                                <input type="text" id="${fieldId}" class="form-control color-hex-input" data-config-path="${fullPath}" value="${value}" placeholder="#FFFFFF">
+                            </div>
+                        </div>
+                    `;
+                } else if (key.toLowerCase().includes('pass') || key.toLowerCase().includes('password')) {
+                    // Password field
+                    fieldHtml = `
+                        <div class="config-field">
+                            <label for="${fieldId}">${labelText}</label>
+                            <div class="password-input">
+                                <input type="password" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}" placeholder="Enter ${labelText.toLowerCase()}">
+                                <button type="button" class="btn-icon toggle-password-btn">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Regular text input
+                    fieldHtml = `
+                        <div class="config-field">
+                            <label for="${fieldId}">${labelText}</label>
+                            <input type="text" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}">
+                        </div>
+                    `;
+                }
+            }
+
+            return fieldHtml;
+        };
+
+        // Get appropriate icon for section type
+        const getSectionIcon = (title) => {
+            const icons = {
+                'settings': 'fa-sliders-h',
+                'screen': 'fa-desktop',
+                'wifi': 'fa-wifi',
+                'mqtt': 'fa-broadcast-tower',
+                'device': 'fa-microchip',
+                'general': 'fa-cog',
+                'network': 'fa-network-wired',
+                'display': 'fa-tv',
+                'theme': 'fa-palette',
+                'colors': 'fa-paint-brush'
+            };
+            return icons[title.toLowerCase()] || 'fa-cog';
+        };
+
+        // Helper to create a section from an object
+        const createSection = (title, obj, path = '') => {
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+                return '';
+            }
+
+            let fieldsHtml = '';
+            for (const [key, value] of Object.entries(obj)) {
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    // Nested object - create subsection
+                    fieldsHtml += createSection(key.charAt(0).toUpperCase() + key.slice(1), value, path ? `${path}.${key}` : key);
+                } else if (!Array.isArray(value)) {
+                    // Simple value - create field
+                    fieldsHtml += createField(key, value, path);
+                }
+            }
+
+            if (!fieldsHtml) return '';
+
+            const icon = getSectionIcon(title);
+            return `
+                <div class="config-section">
+                    <h3 class="config-section-title"><i class="fas ${icon}"></i> ${title}</h3>
+                    <div class="config-section-fields">
+                        ${fieldsHtml}
+                    </div>
+                </div>
+            `;
+        };
+
+        // Helper to create fields from an object (without section wrapper)
+        const createFieldsFromObject = (obj, path = '') => {
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+                return '';
+            }
+
+            let fieldsHtml = '';
+            for (const [key, value] of Object.entries(obj)) {
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    // Nested object - recurse
+                    fieldsHtml += createFieldsFromObject(value, path ? `${path}.${key}` : key);
+                } else if (!Array.isArray(value)) {
+                    // Simple value - create field
+                    fieldsHtml += createField(key, value, path);
+                }
+            }
+            return fieldsHtml;
+        };
+
+        // Build the dynamic config UI with organized sections
+        let html = '';
+
+        // 1. DEVICE SECTION - includes device info and screen settings
+        let deviceFields = '';
+        if (config.device) {
+            deviceFields += createFieldsFromObject(config.device, 'device');
+        }
+        if (config.screen) {
+            deviceFields += createFieldsFromObject(config.screen, 'screen');
+        }
+        if (deviceFields) {
+            html += `
+                <div class="config-section">
+                    <h3 class="config-section-title"><i class="fas fa-microchip"></i> Device</h3>
+                    <div class="config-section-fields">
+                        ${deviceFields}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 2. TIME & LOCATION SECTION - editable time/date with sync button
+        const currentTimezone = config.timezone || config.device?.timezone || '';
+        html += `
+            <div class="config-section">
+                <h3 class="config-section-title"><i class="fas fa-clock"></i> Time & Location</h3>
+                <div class="config-section-fields">
+                    <div class="config-field">
+                        <label for="config-time">Time</label>
+                        <div class="input-with-button">
+                            <input type="time" id="config-time" class="form-control" step="1">
+                            <button type="button" class="btn btn-secondary btn-detect" id="detectTimeBtn">
+                                <i class="fas fa-crosshairs"></i> Detect
+                            </button>
+                        </div>
+                    </div>
+                    <div class="config-field">
+                        <label for="config-date">Date</label>
+                        <input type="date" id="config-date" class="form-control">
+                    </div>
+                    <div class="config-field">
+                        <label for="config-timezone">Timezone</label>
+                        <div class="input-with-button">
+                            <input type="text" id="config-timezone" class="form-control" data-config-path="timezone" value="${currentTimezone}" placeholder="e.g. America/New_York">
+                            <button type="button" class="btn btn-secondary btn-detect" id="detectTimezoneBtn">
+                                <i class="fas fa-crosshairs"></i> Detect
+                            </button>
+                        </div>
+                    </div>
+                    <div class="config-field config-field-actions">
+                        <label></label>
+                        <button type="button" class="btn btn-primary" id="syncTimeBtn">
+                            <i class="fas fa-sync"></i> Sync Time to Device
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 3. GENERAL SECTION - top-level simple properties (excluding already handled ones)
+        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone'];
+        const topLevelFields = {};
+        for (const [key, value] of Object.entries(config)) {
+            if (!excludeKeys.includes(key) && typeof value !== 'object') {
+                topLevelFields[key] = value;
+            }
+        }
+        if (Object.keys(topLevelFields).length > 0) {
+            let generalFields = '';
+            for (const [key, value] of Object.entries(topLevelFields)) {
+                generalFields += createField(key, value, '');
+            }
+            html += `
+                <div class="config-section">
+                    <h3 class="config-section-title"><i class="fas fa-cog"></i> General</h3>
+                    <div class="config-section-fields">
+                        ${generalFields}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 4. SETTINGS SECTION - WiFi, MQTT, and other settings (but avoid duplicating WiFi)
+        let settingsFields = '';
+
+        // Get WiFi config (either from settings.wifi or top-level wifi, not both)
+        const wifiConfig = config.settings?.wifi || config.wifi;
+        if (wifiConfig) {
+            const wifiPath = config.settings?.wifi ? 'settings.wifi' : 'wifi';
+            settingsFields += createFieldsFromObject(wifiConfig, wifiPath);
+        }
+
+        // Get MQTT config (either from settings.mqtt or top-level mqtt, not both)
+        const mqttConfig = config.settings?.mqtt || config.mqtt;
+        if (mqttConfig) {
+            const mqttPath = config.settings?.mqtt ? 'settings.mqtt' : 'mqtt';
+            settingsFields += createFieldsFromObject(mqttConfig, mqttPath);
+        }
+
+        // Add other settings fields (excluding wifi and mqtt which we handled above)
+        if (config.settings) {
+            for (const [key, value] of Object.entries(config.settings)) {
+                if (key !== 'wifi' && key !== 'mqtt') {
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        settingsFields += createFieldsFromObject(value, `settings.${key}`);
+                    } else if (!Array.isArray(value)) {
+                        settingsFields += createField(key, value, 'settings');
+                    }
+                }
+            }
+        }
+
+        if (settingsFields) {
+            html += `
+                <div class="config-section">
+                    <h3 class="config-section-title"><i class="fas fa-wifi"></i> Network & Settings</h3>
+                    <div class="config-section-fields">
+                        ${settingsFields}
+                    </div>
+                </div>
+            `;
+        }
+
+        if (!html) {
+            html = `
+                <div class="config-empty">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No configuration options available.</p>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html;
+
+        // Setup event listeners for color pickers
+        container.querySelectorAll('.color-picker-wrapper').forEach(wrapper => {
+            const picker = wrapper.querySelector('.color-picker-input');
+            const hexInput = wrapper.querySelector('.color-hex-input');
+
+            if (picker && hexInput) {
+                // Sync picker to hex input
+                picker.addEventListener('input', () => {
+                    hexInput.value = picker.value.toUpperCase();
+                });
+
+                // Sync hex input to picker
+                hexInput.addEventListener('input', () => {
+                    const val = hexInput.value;
+                    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+                        picker.value = val;
+                    }
+                });
+            }
+        });
+
+        // Setup password toggle buttons
+        container.querySelectorAll('.toggle-password-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const input = btn.parentElement.querySelector('input');
+                const icon = btn.querySelector('i');
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.classList.replace('fa-eye', 'fa-eye-slash');
+                } else {
+                    input.type = 'password';
+                    icon.classList.replace('fa-eye-slash', 'fa-eye');
+                }
+            });
+        });
+
+        // Setup time/date fields
+        const timeInput = document.getElementById('config-time');
+        const dateInput = document.getElementById('config-date');
+        const detectTimeBtn = document.getElementById('detectTimeBtn');
+        const detectTimezoneBtn = document.getElementById('detectTimezoneBtn');
+        const timezoneInput = document.getElementById('config-timezone');
+        const syncTimeBtn = document.getElementById('syncTimeBtn');
+
+        // Helper to set current browser time/date
+        const setCurrentTime = () => {
+            const now = new Date();
+            if (timeInput) {
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const seconds = String(now.getSeconds()).padStart(2, '0');
+                timeInput.value = `${hours}:${minutes}:${seconds}`;
+            }
+            if (dateInput) {
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
+                dateInput.value = `${year}-${month}-${day}`;
+            }
+        };
+
+        // Set initial values to current time
+        setCurrentTime();
+
+        // Detect time button
+        if (detectTimeBtn) {
+            detectTimeBtn.addEventListener('click', () => {
+                setCurrentTime();
+                this.showToast('Time updated to current local time', 'success');
+            });
+        }
+
+        // Setup timezone detect button
+        if (detectTimezoneBtn && timezoneInput) {
+            // Auto-detect if empty
+            if (!timezoneInput.value) {
+                timezoneInput.value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            }
+
+            detectTimezoneBtn.addEventListener('click', () => {
+                const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                timezoneInput.value = detectedTimezone;
+                this.showToast(`Detected timezone: ${detectedTimezone}`, 'success');
+            });
+        }
+
+        // Sync time to device button
+        if (syncTimeBtn) {
+            syncTimeBtn.addEventListener('click', async () => {
+                if (!this.serial.connected) {
+                    this.showToast('Please connect to a device first', 'warning');
+                    return;
+                }
+
+                const timeVal = timeInput?.value;
+                const dateVal = dateInput?.value;
+                const timezone = timezoneInput?.value || 'UTC0';
+
+                if (!timeVal || !dateVal) {
+                    this.showToast('Please set both time and date', 'warning');
+                    return;
+                }
+
+                // Parse the time and date
+                const [hours, minutes, seconds] = timeVal.split(':').map(Number);
+                const [year, month, day] = dateVal.split('-').map(Number);
+
+                // Create a Date object and get epoch
+                const dateObj = new Date(year, month - 1, day, hours, minutes, seconds || 0);
+                const epoch = Math.floor(dateObj.getTime() / 1000);
+
+                syncTimeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+                syncTimeBtn.disabled = true;
+
+                try {
+                    const success = await this.serial.syncTime(epoch, timezone);
+                    if (success) {
+                        this.showToast('Time synced to device!', 'success');
+                    } else {
+                        this.showToast('Failed to sync time', 'error');
+                    }
+                } catch (error) {
+                    console.error('Time sync error:', error);
+                    this.showToast('Failed to sync time', 'error');
+                } finally {
+                    syncTimeBtn.innerHTML = '<i class="fas fa-sync"></i> Sync Time to Device';
+                    syncTimeBtn.disabled = false;
+                }
+            });
         }
     }
 
@@ -1693,6 +2200,43 @@ class WebScreenAdmin {
             toast.style.animation = 'toastSlideOut 0.3s ease-in';
             setTimeout(() => toast.remove(), 300);
         }, 5000);
+    }
+
+    // Loading modal
+    showLoadingModal(title = 'Preparing App', message = 'Please wait while the device loads the app') {
+        const modal = document.getElementById('loadingModal');
+        const titleEl = document.getElementById('loadingTitle');
+        const messageEl = document.getElementById('loadingMessage');
+
+        if (titleEl) titleEl.textContent = title;
+        if (messageEl) messageEl.textContent = message;
+
+        if (modal) {
+            modal.classList.add('active');
+        }
+
+        // Set waiting flag
+        this.waitingForScriptExecution = true;
+
+        // Set a timeout to auto-hide after 30 seconds (fallback)
+        this.scriptExecutionTimeout = setTimeout(() => {
+            console.log('Script execution timeout, hiding loading modal');
+            this.hideLoadingModal();
+        }, 30000);
+    }
+
+    hideLoadingModal() {
+        const modal = document.getElementById('loadingModal');
+        if (modal) {
+            modal.classList.remove('active');
+        }
+
+        // Clear waiting flag and timeout
+        this.waitingForScriptExecution = false;
+        if (this.scriptExecutionTimeout) {
+            clearTimeout(this.scriptExecutionTimeout);
+            this.scriptExecutionTimeout = null;
+        }
     }
 
     initializeSections() {
