@@ -791,6 +791,24 @@ body {
     background: white;
 }
 
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
 .btn-icon {
     width: 40px;
     height: 40px;
@@ -1773,6 +1791,152 @@ body {
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--text-primary);
+}
+
+/* Saved Networks */
+.saved-networks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.saved-network-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-color);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.saved-network-item .network-ssid {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.saved-network-item .network-ssid i {
+    margin-right: 0.5rem;
+    color: var(--primary-color);
+}
+
+.saved-network-item .btn-danger,
+.saved-network-item .btn-primary,
+.saved-network-item .btn-secondary {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.saved-network-item.primary-network {
+    background: linear-gradient(135deg, var(--primary-color-alpha, rgba(99, 102, 241, 0.1)) 0%, var(--bg-color) 100%);
+    border-color: var(--primary-color);
+}
+
+.network-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.badge-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.add-network-form {
+    background: var(--bg-color);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px dashed var(--border-color);
+}
+
+.add-network-form .form-row {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.add-network-form .form-group {
+    flex: 1;
+    min-width: 150px;
+    margin-bottom: 0;
+}
+
+.add-network-form .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.add-network-form .form-group input {
+    width: 100%;
+}
+
+.add-network-form > .btn,
+.add-network-form .form-row > .btn {
+    height: 38px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .add-network-form .form-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .add-network-form .form-group {
+        width: 100%;
+    }
+
+    .add-network-form .form-row > .btn {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+}
+
+.info-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.placeholder-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    text-align: center;
+    padding: 1rem;
+}
+
+.divider {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 1rem 0;
+}
+
+.form-section-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+}
+
+.card-header .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
 }
 
 /* Display Settings */

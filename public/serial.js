@@ -22,11 +22,13 @@ class WebScreenSerial {
             this.port = await navigator.serial.requestPort();
 
             // Open the port with WebScreen settings
+            // bufferSize is critical for Mac - without it, data reception can stop after ~1KB
             await this.port.open({
                 baudRate: 115200,
                 dataBits: 8,
                 stopBits: 1,
-                parity: 'none'
+                parity: 'none',
+                bufferSize: 16384  // 16KB buffer to prevent truncation issues on Mac
             });
 
             this.connected = true;

@@ -298,18 +298,6 @@ class WebScreenAdmin {
 
         // Network
         document.getElementById('connectWifiBtn')?.addEventListener('click', () => this.connectWiFi());
-        document.getElementById('togglePassword')?.addEventListener('click', (e) => {
-            const input = document.getElementById('wifiPassword');
-            const icon = e.currentTarget.querySelector('i');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            }
-        });
-
 
         // Modal
         document.getElementById('closeModal')?.addEventListener('click', () => this.closeModal());
@@ -1993,15 +1981,8 @@ class WebScreenAdmin {
             `;
         }
 
-        // 4. SETTINGS SECTION - WiFi, MQTT, and other settings (but avoid duplicating WiFi)
+        // 4. SETTINGS SECTION - MQTT and other settings (WiFi is managed in Network tab)
         let settingsFields = '';
-
-        // Get WiFi config (either from settings.wifi or top-level wifi, not both)
-        const wifiConfig = config.settings?.wifi || config.wifi;
-        if (wifiConfig) {
-            const wifiPath = config.settings?.wifi ? 'settings.wifi' : 'wifi';
-            settingsFields += createFieldsFromObject(wifiConfig, wifiPath);
-        }
 
         // Get MQTT config (either from settings.mqtt or top-level mqtt, not both)
         const mqttConfig = config.settings?.mqtt || config.mqtt;
@@ -2010,9 +1991,10 @@ class WebScreenAdmin {
             settingsFields += createFieldsFromObject(mqttConfig, mqttPath);
         }
 
-        // Add other settings fields (excluding wifi and mqtt which we handled above)
+        // Add other settings fields (excluding wifi and mqtt which we handled separately)
         if (config.settings) {
             for (const [key, value] of Object.entries(config.settings)) {
+                // Skip wifi (managed in Network tab) and mqtt (handled above)
                 if (key !== 'wifi' && key !== 'mqtt') {
                     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                         settingsFields += createFieldsFromObject(value, `settings.${key}`);
@@ -2026,7 +2008,7 @@ class WebScreenAdmin {
         if (settingsFields) {
             html += `
                 <div class="config-section">
-                    <h3 class="config-section-title"><i class="fas fa-wifi"></i> Network & Settings</h3>
+                    <h3 class="config-section-title"><i class="fas fa-cog"></i> Advanced Settings</h3>
                     <div class="config-section-fields">
                         ${settingsFields}
                     </div>
@@ -2177,50 +2159,35 @@ class WebScreenAdmin {
         }
     }
 
-    // Network functions
+    // WiFi Connection
     async connectWiFi() {
         if (!this.serial.connected) {
             this.showToast('Please connect to a device first', 'warning');
             return;
         }
 
-        if (!this.sdCardAvailable) {
-            this.showToast('SD card required to save WiFi settings', 'warning');
-            return;
-        }
-
-        const ssid = document.getElementById('wifiSSID').value;
+        const ssid = document.getElementById('wifiSSID').value.trim();
         const password = document.getElementById('wifiPassword').value;
 
         if (!ssid) {
-            this.showToast('Please enter a network name', 'warning');
+            this.showToast('Please enter a network name (SSID)', 'warning');
             return;
         }
 
-        const btn = document.getElementById('connectWifiBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        btn.disabled = true;
-
         try {
-            // Update WiFi settings using /config set commands
-            await this.serial.setConfig('wifi.ssid', ssid);
-            await this.serial.setConfig('wifi.password', password);
-
-            this.showToast('WiFi settings saved!', 'success');
-
-            // Ask if user wants to reboot to apply settings
-            if (confirm('WiFi settings saved. Do you want to restart the device to connect to the new network?')) {
-                await this.serial.reboot();
-                this.showToast('Device is restarting...', 'info');
-            }
+            this.showToast('Saving WiFi settings...', 'info');
+            await this.serial.connectWiFi(ssid, password);
+            this.showToast('WiFi settings saved. Device will reboot and connect to the network.', 'success');
         } catch (error) {
-            console.error('Failed to save WiFi settings:', error);
+            console.error('Failed to connect WiFi:', error);
             this.showToast('Failed to save WiFi settings', 'error');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
         }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     // Toast notifications
