@@ -296,10 +296,6 @@ class WebScreenAdmin {
         document.getElementById('saveSystemBtn')?.addEventListener('click', () => this.saveSystemSettings());
         document.getElementById('reloadConfigBtn')?.addEventListener('click', () => this.reloadConfig());
 
-        // Brightness slider
-        document.getElementById('displayBrightness')?.addEventListener('input', (e) => {
-            document.getElementById('brightnessValue').textContent = e.target.value;
-        });
 
         // Modal
         document.getElementById('closeModal')?.addEventListener('click', () => this.closeModal());
@@ -1547,26 +1543,13 @@ class WebScreenAdmin {
                 updatedConfig.settings.wifi.pass = wifiPassword;
             }
 
-            // Collect timezone
-            const timezone = document.getElementById('timezoneSelect')?.value;
-            if (timezone) {
-                updatedConfig.timezone = timezone;
-            }
-
-            // Collect display brightness
-            const brightness = document.getElementById('displayBrightness')?.value;
-            if (brightness) {
-                if (!updatedConfig.display) {
-                    updatedConfig.display = {};
-                }
-                updatedConfig.display.brightness = parseInt(brightness, 10);
-            }
-
-            // Clean up any legacy keys that shouldn't exist
-            delete updatedConfig.wifi;
-            delete updatedConfig['wifi.ssid'];
-            delete updatedConfig['wifi.password'];
-            delete updatedConfig.device; // device.name is not used by firmware
+            // Clean up any legacy/temporary keys that shouldn't be in the config file
+            delete updatedConfig.wifi;              // Root-level wifi object (old bug)
+            delete updatedConfig['wifi.ssid'];      // Flat key from /config set bug
+            delete updatedConfig['wifi.password'];  // Flat key from /config set bug
+            delete updatedConfig.wifiSsid;          // Temp key from loadCurrentConfig
+            delete updatedConfig.wifiPass;          // Temp key from loadCurrentConfig
+            delete updatedConfig.device;            // device.name is not used by firmware
 
             // Collect values from all config inputs
             container.querySelectorAll('[data-config-path]').forEach(input => {
@@ -1670,13 +1653,22 @@ class WebScreenAdmin {
 
         // Migrate old format: root level wifi.ssid string (from /config set)
         if (normalized['wifi.ssid']) {
-            normalized.settings.wifi.ssid = normalized['wifi.ssid'];
+            if (!normalized.settings.wifi.ssid) {
+                normalized.settings.wifi.ssid = normalized['wifi.ssid'];
+            }
             delete normalized['wifi.ssid'];
         }
         if (normalized['wifi.password']) {
-            normalized.settings.wifi.pass = normalized['wifi.password'];
+            if (!normalized.settings.wifi.pass) {
+                normalized.settings.wifi.pass = normalized['wifi.password'];
+            }
             delete normalized['wifi.password'];
         }
+
+        // Clean up temporary keys from loadCurrentConfig
+        delete normalized.wifiSsid;
+        delete normalized.wifiPass;
+        delete normalized.device;
 
         // Ensure screen structure
         if (!normalized.screen) {
@@ -1721,14 +1713,6 @@ class WebScreenAdmin {
             const script = await this.serial.getConfig('script');
             if (script) configValues.script = script;
 
-            // Get timezone
-            const timezone = await this.serial.getConfig('timezone');
-            if (timezone) configValues.timezone = timezone;
-
-            // Get brightness
-            const brightness = await this.serial.getConfig('display.brightness');
-            if (brightness) configValues.brightness = brightness;
-
             console.log('loadCurrentConfig: Got config values:', configValues);
 
             // Also try reading webscreen.json as fallback
@@ -1742,20 +1726,15 @@ class WebScreenAdmin {
             const finalSsid = configValues.wifiSsid || wifiConfig.ssid || '';
             const finalPass = configValues.wifiPass || wifiConfig.pass || '';
             const finalScript = configValues.script || fileConfig.script || '';
-            const finalTimezone = configValues.timezone || fileConfig.timezone || '';
-            const finalBrightness = configValues.brightness || fileConfig.display?.brightness || 200;
 
-            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript, 'Timezone:', finalTimezone);
+            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript);
 
             // Populate WiFi fields
             const ssidField = document.getElementById('wifiSSID');
             const passwordField = document.getElementById('wifiPassword');
 
-            console.log('loadCurrentConfig: Found ssidField:', !!ssidField, 'passwordField:', !!passwordField);
-
             if (ssidField) {
                 ssidField.value = finalSsid;
-                console.log('loadCurrentConfig: Set WiFi SSID to:', finalSsid);
             }
             if (passwordField) {
                 passwordField.value = '';
@@ -1764,29 +1743,6 @@ class WebScreenAdmin {
                 } else {
                     passwordField.placeholder = 'Enter WiFi password';
                 }
-            }
-
-            // Populate timezone
-            const timezoneField = document.getElementById('timezoneSelect');
-            if (timezoneField && finalTimezone) {
-                for (const option of timezoneField.options) {
-                    if (option.value === finalTimezone || option.textContent.includes(finalTimezone)) {
-                        option.selected = true;
-                        break;
-                    }
-                }
-                console.log('loadCurrentConfig: Set timezone to:', finalTimezone);
-            }
-
-            // Populate brightness
-            const brightnessSlider = document.getElementById('displayBrightness');
-            const brightnessValue = document.getElementById('brightnessValue');
-            if (brightnessSlider) {
-                brightnessSlider.value = finalBrightness;
-                if (brightnessValue) {
-                    brightnessValue.textContent = finalBrightness;
-                }
-                console.log('loadCurrentConfig: Set brightness to:', finalBrightness);
             }
 
             // Populate script/auto-start dropdown
@@ -1813,8 +1769,8 @@ class WebScreenAdmin {
                 }
             }
 
-            // Store current config for later use
-            this.currentConfig = { ...fileConfig, ...configValues };
+            // Store current config for later use (normalized, without temp keys)
+            this.currentConfig = fileConfig;
 
             // Render the dynamic config UI
             this.renderDynamicConfig(fileConfig);
@@ -1862,11 +1818,28 @@ class WebScreenAdmin {
             return /^#[0-9A-Fa-f]{6}$/.test(value) || /^#[0-9A-Fa-f]{3}$/.test(value);
         };
 
+        // Better labels for known config keys
+        const getLabelForKey = (key, path) => {
+            const fullPath = path ? `${path}.${key}` : key;
+            const labelMap = {
+                'settings.mqtt.enabled': 'Enable MQTT',
+                'settings.wifi.ssid': 'WiFi Network (SSID)',
+                'settings.wifi.pass': 'WiFi Password',
+                'screen.background': 'Background Color',
+                'screen.foreground': 'Text Color'
+            };
+            if (labelMap[fullPath]) {
+                return labelMap[fullPath];
+            }
+            // Default: capitalize and add spaces before uppercase letters
+            return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+        };
+
         // Helper to create a form field based on value type
         const createField = (key, value, path = '') => {
             const fullPath = path ? `${path}.${key}` : key;
             const fieldId = `config-${fullPath.replace(/\./g, '-')}`;
-            const labelText = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+            const labelText = getLabelForKey(key, path);
 
             let fieldHtml = '';
 
