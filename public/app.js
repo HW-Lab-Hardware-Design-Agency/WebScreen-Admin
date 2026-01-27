@@ -11,7 +11,7 @@ class WebScreenAdmin {
         this.currentConfig = null;
 
         // Sections that require SD card
-        this.sdRequiredSections = ['files', 'config', 'network'];
+        this.sdRequiredSections = ['files', 'config'];
 
         // Terminal
         this.terminal = null;
@@ -296,8 +296,10 @@ class WebScreenAdmin {
         document.getElementById('saveSystemBtn')?.addEventListener('click', () => this.saveSystemSettings());
         document.getElementById('reloadConfigBtn')?.addEventListener('click', () => this.reloadConfig());
 
-        // Network
-        document.getElementById('connectWifiBtn')?.addEventListener('click', () => this.connectWiFi());
+        // Brightness slider
+        document.getElementById('displayBrightness')?.addEventListener('input', (e) => {
+            document.getElementById('brightnessValue').textContent = e.target.value;
+        });
 
         // Modal
         document.getElementById('closeModal')?.addEventListener('click', () => this.closeModal());
@@ -1517,7 +1519,9 @@ class WebScreenAdmin {
         try {
             // Collect all values from dynamic config fields
             const container = document.getElementById('dynamicConfigContainer');
-            const updatedConfig = JSON.parse(JSON.stringify(this.currentConfig || {}));
+
+            // Start with normalized current config (migrates old format)
+            const updatedConfig = this.normalizeConfig(this.currentConfig || {});
 
             // Helper to set nested value in object
             const setNestedValue = (obj, path, value) => {
@@ -1531,6 +1535,38 @@ class WebScreenAdmin {
                 }
                 current[keys[keys.length - 1]] = value;
             };
+
+            // Collect WiFi settings from the form
+            const wifiSsid = document.getElementById('wifiSSID')?.value?.trim();
+            const wifiPassword = document.getElementById('wifiPassword')?.value;
+
+            if (wifiSsid) {
+                updatedConfig.settings.wifi.ssid = wifiSsid;
+            }
+            if (wifiPassword) {
+                updatedConfig.settings.wifi.pass = wifiPassword;
+            }
+
+            // Collect timezone
+            const timezone = document.getElementById('timezoneSelect')?.value;
+            if (timezone) {
+                updatedConfig.timezone = timezone;
+            }
+
+            // Collect display brightness
+            const brightness = document.getElementById('displayBrightness')?.value;
+            if (brightness) {
+                if (!updatedConfig.display) {
+                    updatedConfig.display = {};
+                }
+                updatedConfig.display.brightness = parseInt(brightness, 10);
+            }
+
+            // Clean up any legacy keys that shouldn't exist
+            delete updatedConfig.wifi;
+            delete updatedConfig['wifi.ssid'];
+            delete updatedConfig['wifi.password'];
+            delete updatedConfig.device; // device.name is not used by firmware
 
             // Collect values from all config inputs
             container.querySelectorAll('[data-config-path]').forEach(input => {
@@ -1561,7 +1597,7 @@ class WebScreenAdmin {
             // Update the stored config
             this.currentConfig = updatedConfig;
 
-            this.showToast('Settings saved!', 'success');
+            this.showToast('Settings saved! Restart device to apply changes.', 'success');
 
         } catch (error) {
             console.error('Failed to save settings:', error);
@@ -1597,8 +1633,60 @@ class WebScreenAdmin {
                 background: '#000000',
                 foreground: '#FFFFFF'
             },
-            script: ''
+            script: '',
+            timezone: ''
         };
+    }
+
+    // Normalize config to standard format (handles backwards compatibility)
+    normalizeConfig(config) {
+        const normalized = JSON.parse(JSON.stringify(config));
+
+        // Ensure settings structure exists
+        if (!normalized.settings) {
+            normalized.settings = {};
+        }
+        if (!normalized.settings.wifi) {
+            normalized.settings.wifi = {};
+        }
+        if (!normalized.settings.mqtt) {
+            normalized.settings.mqtt = { enabled: false };
+        }
+
+        // Migrate old wifi format (root level wifi.ssid/wifi.password) to settings.wifi
+        if (normalized.wifi && typeof normalized.wifi === 'object') {
+            if (normalized.wifi.ssid && !normalized.settings.wifi.ssid) {
+                normalized.settings.wifi.ssid = normalized.wifi.ssid;
+            }
+            if (normalized.wifi.password && !normalized.settings.wifi.pass) {
+                normalized.settings.wifi.pass = normalized.wifi.password;
+            }
+            if (normalized.wifi.pass && !normalized.settings.wifi.pass) {
+                normalized.settings.wifi.pass = normalized.wifi.pass;
+            }
+            // Remove duplicate root-level wifi key
+            delete normalized.wifi;
+        }
+
+        // Migrate old format: root level wifi.ssid string (from /config set)
+        if (normalized['wifi.ssid']) {
+            normalized.settings.wifi.ssid = normalized['wifi.ssid'];
+            delete normalized['wifi.ssid'];
+        }
+        if (normalized['wifi.password']) {
+            normalized.settings.wifi.pass = normalized['wifi.password'];
+            delete normalized['wifi.password'];
+        }
+
+        // Ensure screen structure
+        if (!normalized.screen) {
+            normalized.screen = {
+                background: '#000000',
+                foreground: '#FFFFFF'
+            };
+        }
+
+        return normalized;
     }
 
     async saveWebScreenConfig(config) {
@@ -1619,41 +1707,45 @@ class WebScreenAdmin {
             // Try to get config values using /config get commands (more reliable)
             const configValues = {};
 
-            // Get WiFi SSID
-            const wifiSsid = await this.serial.getConfig('wifi.ssid');
+            // Get WiFi SSID (try both old and new paths)
+            let wifiSsid = await this.serial.getConfig('settings.wifi.ssid');
+            if (!wifiSsid) wifiSsid = await this.serial.getConfig('wifi.ssid');
             if (wifiSsid) configValues.wifiSsid = wifiSsid;
 
             // Get WiFi password (might not be returned for security)
-            const wifiPass = await this.serial.getConfig('wifi.password');
+            let wifiPass = await this.serial.getConfig('settings.wifi.pass');
+            if (!wifiPass) wifiPass = await this.serial.getConfig('wifi.password');
             if (wifiPass) configValues.wifiPass = wifiPass;
 
             // Get script
             const script = await this.serial.getConfig('script');
             if (script) configValues.script = script;
 
-            // Get device name
-            const deviceName = await this.serial.getConfig('device.name');
-            if (deviceName) configValues.deviceName = deviceName;
-
             // Get timezone
             const timezone = await this.serial.getConfig('timezone');
             if (timezone) configValues.timezone = timezone;
 
+            // Get brightness
+            const brightness = await this.serial.getConfig('display.brightness');
+            if (brightness) configValues.brightness = brightness;
+
             console.log('loadCurrentConfig: Got config values:', configValues);
 
             // Also try reading webscreen.json as fallback
-            const fileConfig = await this.readWebScreenConfig();
-            console.log('loadCurrentConfig: File config:', fileConfig);
+            let fileConfig = await this.readWebScreenConfig();
+            // Normalize config for backwards compatibility
+            fileConfig = this.normalizeConfig(fileConfig);
+            console.log('loadCurrentConfig: Normalized file config:', fileConfig);
 
             // Merge configs (command values take priority)
-            const wifiConfig = fileConfig.settings?.wifi || fileConfig.wifi || {};
-            const finalSsid = configValues.wifiSsid || wifiConfig.ssid || fileConfig['wifi.ssid'] || '';
-            const finalPass = configValues.wifiPass || wifiConfig.pass || wifiConfig.password || '';
+            const wifiConfig = fileConfig.settings?.wifi || {};
+            const finalSsid = configValues.wifiSsid || wifiConfig.ssid || '';
+            const finalPass = configValues.wifiPass || wifiConfig.pass || '';
             const finalScript = configValues.script || fileConfig.script || '';
-            const finalDeviceName = configValues.deviceName || fileConfig.device?.name || fileConfig.name || '';
-            const finalTimezone = configValues.timezone || fileConfig.device?.timezone || fileConfig.timezone || '';
+            const finalTimezone = configValues.timezone || fileConfig.timezone || '';
+            const finalBrightness = configValues.brightness || fileConfig.display?.brightness || 200;
 
-            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript, 'DeviceName:', finalDeviceName);
+            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript, 'Timezone:', finalTimezone);
 
             // Populate WiFi fields
             const ssidField = document.getElementById('wifiSSID');
@@ -1674,16 +1766,8 @@ class WebScreenAdmin {
                 }
             }
 
-            // Populate device settings
-            const deviceNameField = document.getElementById('deviceName');
-            const timezoneField = document.getElementById('timezone');
-
-            console.log('loadCurrentConfig: Found deviceNameField:', !!deviceNameField, 'timezoneField:', !!timezoneField);
-
-            if (deviceNameField) {
-                deviceNameField.value = finalDeviceName;
-                console.log('loadCurrentConfig: Set device name to:', finalDeviceName);
-            }
+            // Populate timezone
+            const timezoneField = document.getElementById('timezoneSelect');
             if (timezoneField && finalTimezone) {
                 for (const option of timezoneField.options) {
                     if (option.value === finalTimezone || option.textContent.includes(finalTimezone)) {
@@ -1691,6 +1775,18 @@ class WebScreenAdmin {
                         break;
                     }
                 }
+                console.log('loadCurrentConfig: Set timezone to:', finalTimezone);
+            }
+
+            // Populate brightness
+            const brightnessSlider = document.getElementById('displayBrightness');
+            const brightnessValue = document.getElementById('brightnessValue');
+            if (brightnessSlider) {
+                brightnessSlider.value = finalBrightness;
+                if (brightnessValue) {
+                    brightnessValue.textContent = finalBrightness;
+                }
+                console.log('loadCurrentConfig: Set brightness to:', finalBrightness);
             }
 
             // Populate script/auto-start dropdown

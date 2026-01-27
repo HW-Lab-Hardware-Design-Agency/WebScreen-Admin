@@ -853,8 +853,8 @@ class WebScreenSerial {
     }
 
     async connectWiFi(ssid, password) {
-        await this.setConfig('wifi.ssid', ssid);
-        await this.setConfig('wifi.password', password);
+        await this.setConfig('settings.wifi.ssid', ssid);
+        await this.setConfig('settings.wifi.pass', password);
         await this.sendCommand('/reboot');
         return true;
     }
