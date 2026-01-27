@@ -1822,9 +1822,8 @@ class WebScreenAdmin {
         const getLabelForKey = (key, path) => {
             const fullPath = path ? `${path}.${key}` : key;
             const labelMap = {
-                'settings.mqtt.enabled': 'Enable MQTT',
-                'settings.wifi.ssid': 'WiFi Network (SSID)',
-                'settings.wifi.pass': 'WiFi Password',
+                'settings.mqtt.enabled': 'MQTT',
+                'mqtt.enabled': 'MQTT',
                 'screen.background': 'Background Color',
                 'screen.foreground': 'Text Color'
             };
@@ -1835,9 +1834,22 @@ class WebScreenAdmin {
             return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
         };
 
+        // Keys to completely skip rendering (handled by static UI)
+        const skipPaths = [
+            'settings.wifi', 'settings.wifi.ssid', 'settings.wifi.pass',
+            'wifi', 'wifi.ssid', 'wifi.password', 'wifi.pass',
+            'wifiSsid', 'wifiPass'
+        ];
+
         // Helper to create a form field based on value type
         const createField = (key, value, path = '') => {
             const fullPath = path ? `${path}.${key}` : key;
+
+            // Skip paths that are handled by static UI
+            if (skipPaths.includes(fullPath) || skipPaths.includes(key)) {
+                return '';
+            }
+
             const fieldId = `config-${fullPath.replace(/\./g, '-')}`;
             const labelText = getLabelForKey(key, path);
 
@@ -1956,9 +1968,16 @@ class WebScreenAdmin {
 
             let fieldsHtml = '';
             for (const [key, value] of Object.entries(obj)) {
+                const fullPath = path ? `${path}.${key}` : key;
+
+                // Skip paths that are handled by static UI
+                if (skipPaths.includes(fullPath) || skipPaths.includes(key)) {
+                    continue;
+                }
+
                 if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                     // Nested object - recurse
-                    fieldsHtml += createFieldsFromObject(value, path ? `${path}.${key}` : key);
+                    fieldsHtml += createFieldsFromObject(value, fullPath);
                 } else if (!Array.isArray(value)) {
                     // Simple value - create field
                     fieldsHtml += createField(key, value, path);
