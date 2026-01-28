@@ -296,7 +296,6 @@ class WebScreenAdmin {
         document.getElementById('saveSystemBtn')?.addEventListener('click', () => this.saveSystemSettings());
         document.getElementById('reloadConfigBtn')?.addEventListener('click', () => this.reloadConfig());
 
-
         // Modal
         document.getElementById('closeModal')?.addEventListener('click', () => this.closeModal());
         document.getElementById('cancelInstallBtn')?.addEventListener('click', () => this.closeModal());
@@ -1543,6 +1542,13 @@ class WebScreenAdmin {
                 updatedConfig.settings.wifi.pass = wifiPassword;
             }
 
+            // Collect brightness setting
+            const brightnessSlider = document.getElementById('brightnessSlider');
+            if (brightnessSlider) {
+                if (!updatedConfig.display) updatedConfig.display = {};
+                updatedConfig.display.brightness = parseInt(brightnessSlider.value, 10);
+            }
+
             // Clean up any legacy/temporary keys that shouldn't be in the config file
             delete updatedConfig.wifi;              // Root-level wifi object (old bug)
             delete updatedConfig['wifi.ssid'];      // Flat key from /config set bug
@@ -1678,6 +1684,14 @@ class WebScreenAdmin {
             };
         }
 
+        // Ensure display structure for brightness
+        if (!normalized.display) {
+            normalized.display = {};
+        }
+        if (normalized.display.brightness === undefined) {
+            normalized.display.brightness = 200;
+        }
+
         return normalized;
     }
 
@@ -1729,7 +1743,13 @@ class WebScreenAdmin {
 
             console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript);
 
-            // Populate WiFi fields
+            // Store current config for later use (normalized, without temp keys)
+            this.currentConfig = fileConfig;
+
+            // Render the dynamic config UI (creates WiFi, brightness, etc. DOM elements)
+            this.renderDynamicConfig(fileConfig);
+
+            // Populate WiFi fields (after render, since they're created dynamically)
             const ssidField = document.getElementById('wifiSSID');
             const passwordField = document.getElementById('wifiPassword');
 
@@ -1743,6 +1763,26 @@ class WebScreenAdmin {
                 } else {
                     passwordField.placeholder = 'Enter WiFi password';
                 }
+            }
+
+            // Populate brightness slider and attach event listeners
+            const brightnessSlider = document.getElementById('brightnessSlider');
+            const brightnessValue = document.getElementById('brightnessValue');
+            const configBrightness = fileConfig.display?.brightness;
+            if (brightnessSlider) {
+                if (configBrightness !== undefined) {
+                    brightnessSlider.value = configBrightness;
+                    if (brightnessValue) brightnessValue.textContent = configBrightness;
+                }
+                brightnessSlider.addEventListener('input', (e) => {
+                    const bv = document.getElementById('brightnessValue');
+                    if (bv) bv.textContent = e.target.value;
+                });
+                brightnessSlider.addEventListener('change', (e) => {
+                    if (this.serial.connected) {
+                        this.serial.setBrightness(parseInt(e.target.value, 10));
+                    }
+                });
             }
 
             // Populate script/auto-start dropdown
@@ -1768,12 +1808,6 @@ class WebScreenAdmin {
                     console.log('loadCurrentConfig: Set auto-start script to:', finalScript);
                 }
             }
-
-            // Store current config for later use (normalized, without temp keys)
-            this.currentConfig = fileConfig;
-
-            // Render the dynamic config UI
-            this.renderDynamicConfig(fileConfig);
 
         } catch (error) {
             console.error('Failed to load current config:', error);
@@ -1838,7 +1872,8 @@ class WebScreenAdmin {
         const skipPaths = [
             'settings.wifi', 'settings.wifi.ssid', 'settings.wifi.pass',
             'wifi', 'wifi.ssid', 'wifi.password', 'wifi.pass',
-            'wifiSsid', 'wifiPass'
+            'wifiSsid', 'wifiPass',
+            'display.brightness'
         ];
 
         // Helper to create a form field based on value type
@@ -1989,7 +2024,58 @@ class WebScreenAdmin {
         // Build the dynamic config UI with organized sections
         let html = '';
 
-        // 1. DEVICE SECTION - includes device info and screen settings
+        // 1. GENERAL SECTION - WiFi + top-level simple properties
+        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone', 'display'];
+        let generalFields = '';
+
+        // WiFi fields
+        const wifiSsid = config.settings?.wifi?.ssid || '';
+        generalFields += `
+            <div class="config-field">
+                <label for="wifiSSID">WiFi Network (SSID)</label>
+                <input type="text" id="wifiSSID" class="form-control" data-config-path="settings.wifi.ssid" value="${wifiSsid}" placeholder="Enter WiFi network name">
+            </div>
+            <div class="config-field">
+                <label for="wifiPassword">WiFi Password</label>
+                <input type="password" id="wifiPassword" class="form-control" placeholder="Enter WiFi password">
+            </div>
+            <div class="network-status" style="margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">
+                <div class="status-item">
+                    <span class="status-label">Status:</span>
+                    <span class="status-value" id="netStatus">Not Connected</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">IP Address:</span>
+                    <span class="status-value" id="netIP">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Signal:</span>
+                    <span class="status-value" id="netSignal">-</span>
+                </div>
+            </div>
+        `;
+
+        // Top-level simple properties
+        const topLevelFields = {};
+        for (const [key, value] of Object.entries(config)) {
+            if (!excludeKeys.includes(key) && typeof value !== 'object') {
+                topLevelFields[key] = value;
+            }
+        }
+        for (const [key, value] of Object.entries(topLevelFields)) {
+            generalFields += createField(key, value, '');
+        }
+
+        html += `
+            <div class="config-section">
+                <h3 class="config-section-title"><i class="fas fa-cog"></i> General</h3>
+                <div class="config-section-fields">
+                    ${generalFields}
+                </div>
+            </div>
+        `;
+
+        // 2. DEVICE SECTION - includes screen settings + brightness
         let deviceFields = '';
         if (config.device) {
             deviceFields += createFieldsFromObject(config.device, 'device');
@@ -1997,18 +2083,23 @@ class WebScreenAdmin {
         if (config.screen) {
             deviceFields += createFieldsFromObject(config.screen, 'screen');
         }
-        if (deviceFields) {
-            html += `
-                <div class="config-section">
-                    <h3 class="config-section-title"><i class="fas fa-microchip"></i> Device</h3>
-                    <div class="config-section-fields">
-                        ${deviceFields}
-                    </div>
+        // Brightness slider
+        deviceFields += `
+            <div class="config-field">
+                <label for="brightnessSlider">Brightness (<span id="brightnessValue">200</span>/255)</label>
+                <input type="range" id="brightnessSlider" class="form-control" min="0" max="255" value="${config.display?.brightness ?? 200}" style="width: 100%;">
+            </div>
+        `;
+        html += `
+            <div class="config-section">
+                <h3 class="config-section-title"><i class="fas fa-microchip"></i> Device</h3>
+                <div class="config-section-fields">
+                    ${deviceFields}
                 </div>
-            `;
-        }
+            </div>
+        `;
 
-        // 2. TIME & LOCATION SECTION - editable time/date with sync button
+        // 3. TIME & LOCATION SECTION - editable time/date with sync button
         const currentTimezone = config.timezone || config.device?.timezone || '';
         html += `
             <div class="config-section">
@@ -2045,29 +2136,6 @@ class WebScreenAdmin {
                 </div>
             </div>
         `;
-
-        // 3. GENERAL SECTION - top-level simple properties (excluding already handled ones)
-        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone'];
-        const topLevelFields = {};
-        for (const [key, value] of Object.entries(config)) {
-            if (!excludeKeys.includes(key) && typeof value !== 'object') {
-                topLevelFields[key] = value;
-            }
-        }
-        if (Object.keys(topLevelFields).length > 0) {
-            let generalFields = '';
-            for (const [key, value] of Object.entries(topLevelFields)) {
-                generalFields += createField(key, value, '');
-            }
-            html += `
-                <div class="config-section">
-                    <h3 class="config-section-title"><i class="fas fa-cog"></i> General</h3>
-                    <div class="config-section-fields">
-                        ${generalFields}
-                    </div>
-                </div>
-            `;
-        }
 
         // 4. SETTINGS SECTION - MQTT and other settings (WiFi is managed in Network tab)
         let settingsFields = '';

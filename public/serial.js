@@ -860,7 +860,8 @@ class WebScreenSerial {
     }
 
     async setBrightness(value) {
-        await this.setConfig('display.brightness', value);
+        // Apply brightness in real-time via /brightness command
+        await this.sendCommand(`/brightness ${value}`);
         return true;
     }
 

@@ -90,20 +90,13 @@ A modern, user-friendly web application for configuring and managing WebScreen d
 
 #### Configuring Settings
 
-1. **System Settings**
+1. **Settings**
    - Go to "Settings" in the sidebar
-   - Enter device name and preferences
-   - Select timezone
-   - Choose app to auto-start
-   - Click "Save Settings"
-
-2. **Display Settings**
-   - Go to "Display" in the sidebar
-   - Adjust brightness with the slider
-   - Select screen orientation
-   - Set screen timeout
-   - See preview of changes
-   - Click "Save Display Settings"
+   - **General**: WiFi network name/password, auto-start script
+   - **Device**: Screen colors, display brightness (0-255 slider with real-time preview)
+   - **Time & Location**: Timezone configuration
+   - **Advanced**: Additional device settings
+   - Click "Save Settings" to persist all changes to the device
 
 ## Interface Overview
 
@@ -111,9 +104,9 @@ A modern, user-friendly web application for configuring and managing WebScreen d
 - **Dashboard**: Overview and quick actions
 - **Marketplace**: Browse and install applications
 - **Files**: Manage device files
-- **Settings**: System configuration
-- **Network**: WiFi setup
-- **Display**: Screen settings
+- **Settings**: System configuration (General, Device, Time & Location, Advanced)
+  - WiFi setup is in the General section
+  - Brightness control is in the Device section
 
 ### Color-Coded Feedback
 - **Green**: Successful actions
