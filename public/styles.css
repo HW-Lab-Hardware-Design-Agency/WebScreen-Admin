@@ -1556,6 +1556,14 @@ body {
     max-width: none;
 }
 
+.input-with-button select.form-control {
+    min-width: 0;
+}
+
+#config-timezone {
+    max-width: 280px;
+}
+
 .btn-detect {
     padding: 0.5rem 0.875rem;
     font-size: 0.8rem;
