@@ -877,7 +877,7 @@ class WebScreenSerial {
 
     // Sync device time
     // epoch: Unix timestamp in seconds
-    // timezone: Optional timezone string (e.g., "America/New_York" or "UTC0")
+    // timezone: Optional POSIX TZ string (e.g., "EST5EDT,M3.2.0,M11.1.0" or "<-03>3")
     async syncTime(epoch, timezone = null) {
         return new Promise((resolve) => {
             let success = false;

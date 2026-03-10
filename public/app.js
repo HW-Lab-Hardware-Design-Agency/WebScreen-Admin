@@ -1391,6 +1391,25 @@ class WebScreenAdmin {
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/dual_clock/script.js",
                     "size": 3,
                     "featured": true
+                },
+                {
+                    "name": "MQTT Notifications",
+                    "id": "mqtt",
+                    "category": "productivity",
+                    "description": "Display real-time notifications from any MQTT-enabled device or service. Supports JSON and plain text messages.",
+                    "icon": "fa-bell",
+                    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/mqtt_notifications",
+                    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/mqtt_notifications/script.js",
+                    "size": 6,
+                    "featured": true,
+                    "requires_mqtt": true,
+                    "install_config": {
+                        "settings.mqtt.enabled": true,
+                        "mqtt_broker": "broker.hivemq.com",
+                        "mqtt_port": 1883,
+                        "mqtt_topic": "webscreen/notifications",
+                        "mqtt_client_id": "webscreen01"
+                    }
                 }
             ];
 
@@ -1509,6 +1528,22 @@ class WebScreenAdmin {
             </div>
         `);
 
+        // Show MQTT config note if app requires it
+        const existingNote = document.querySelector('.modal-body .mqtt-config-note');
+        if (existingNote) existingNote.remove();
+        if (app.requires_mqtt && app.install_config) {
+            const noteHtml = `
+                <div class="mqtt-config-note" style="background: var(--hover-bg, #f0f4f8); border-radius: 8px; padding: 12px 14px; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.5;">
+                    <div style="font-weight: 600; margin-bottom: 6px;"><i class="fas fa-cog"></i> MQTT Configuration</div>
+                    <div style="color: var(--text-secondary, #666);">
+                        After installing, go to <strong>Settings</strong> to update the MQTT broker settings.
+                        Default broker: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${app.install_config.mqtt_broker || 'broker.hivemq.com'}</code>
+                        Topic: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${app.install_config.mqtt_topic || 'webscreen/notifications'}</code>
+                    </div>
+                </div>`;
+            document.getElementById('modalAppDesc').insertAdjacentHTML('afterend', noteHtml);
+        }
+
         // Update install button state based on connection and SD card
         const installBtn = document.getElementById('installAppBtn');
         if (!this.serial.connected) {
@@ -1531,9 +1566,11 @@ class WebScreenAdmin {
 
     closeModal() {
         document.getElementById('appModal').classList.remove('active');
-        // Clean up inserted icon
+        // Clean up inserted icon and config notes
         const insertedIcon = document.querySelector('.modal-body .app-card-icon');
         if (insertedIcon) insertedIcon.remove();
+        const mqttNote = document.querySelector('.modal-body .mqtt-config-note');
+        if (mqttNote) mqttNote.remove();
     }
 
     async installApp() {
@@ -1701,6 +1738,15 @@ class WebScreenAdmin {
             // Step 4: Update the script setting in config
             updateProgress(4, 70, 'Updating configuration...');
             await this.serial.setConfig('script', scriptFilename);
+
+            // Apply additional config keys if the app defines them
+            if (app.install_config) {
+                updateProgress(4, 75, 'Applying app settings...');
+                for (const [key, value] of Object.entries(app.install_config)) {
+                    await this.serial.setConfig(key, value);
+                }
+            }
+
             updateProgress(4, 85, 'Configuration saved');
 
             // Mark all steps as completed
