@@ -282,6 +282,51 @@
                                         <i class="fas fa-sync"></i>
                                         <span>Refresh Info</span>
                                     </button>
+                                    <button class="action-btn" id="screenshotBtn">
+                                        <i class="fas fa-camera"></i>
+                                        <span>Screenshot</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- App Health Card -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-heartbeat"></i> App Health</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">Running Script:</span>
+                                        <span class="info-value" id="jsScript">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Safe Mode:</span>
+                                        <span class="info-value" id="jsSafeMode">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Restart Failures:</span>
+                                        <span class="info-value" id="jsRestartFailures">-</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Auto-restart Cycles:</span>
+                                        <span class="info-value" id="jsAutoRestartCycles">-</span>
+                                    </div>
+                                    <div class="info-item" style="grid-column: 1 / -1;">
+                                        <span class="info-label">Last JS Error:</span>
+                                        <span class="info-value" id="jsLastError">-</span>
+                                    </div>
+                                </div>
+                                <div class="quick-actions" style="margin-top: 0.75rem;">
+                                    <button class="action-btn" id="checkErrorsBtn">
+                                        <i class="fas fa-stethoscope"></i>
+                                        <span>Check Errors</span>
+                                    </button>
+                                    <button class="action-btn" id="runGCBtn">
+                                        <i class="fas fa-broom"></i>
+                                        <span>Run GC</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -291,6 +336,9 @@
                             <div class="card-header">
                                 <h3><i class="fas fa-terminal"></i> Serial Console</h3>
                                 <div class="console-actions">
+                                    <button class="console-action-btn" id="replToggleBtn" title="JS REPL mode: send typed input as /eval into the running app">
+                                        <i class="fas fa-code"></i>
+                                    </button>
                                     <button class="console-action-btn" id="clearConsoleBtn" title="Clear console">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -371,10 +419,10 @@
                                     <span id="currentPath">/</span>
                                 </div>
                                 <div class="file-actions">
-                                    <button class="btn-icon" id="newFolderBtn">
+                                    <button class="btn-icon" id="newFolderBtn" title="New folder">
                                         <i class="fas fa-folder-plus"></i>
                                     </button>
-                                    <button class="btn-icon" id="refreshFilesBtn">
+                                    <button class="btn-icon" id="refreshFilesBtn" title="Refresh">
                                         <i class="fas fa-sync"></i>
                                     </button>
                                 </div>
@@ -490,6 +538,26 @@
                 <p id="loadingMessage" style="color: var(--text-secondary); margin: 0;">
                     Please wait while the device loads the app
                 </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screenshot Modal -->
+    <div class="modal" id="screenshotModal">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-camera"></i> Device Screenshot</h3>
+                <button class="modal-close" id="closeScreenshotModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <canvas id="screenshotCanvas" style="max-width: 100%; border: 1px solid var(--border-color); border-radius: 8px;"></canvas>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="downloadScreenshotBtn">
+                    <i class="fas fa-download"></i> Download PNG
+                </button>
             </div>
         </div>
     </div>

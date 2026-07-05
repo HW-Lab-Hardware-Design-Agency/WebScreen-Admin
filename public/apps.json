@@ -6,18 +6,18 @@
     "description": "Simple LED blinking example to test your WebScreen setup",
     "icon": "fa-lightbulb",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/blink",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/blink/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/blink/script.js",
     "size": 1,
     "featured": true
   },
   {
     "name": "Time API",
-    "id": "timeapi_app",
+    "id": "timeapi",
     "category": "productivity",
     "description": "Display current time and date from world time API",
     "icon": "fa-clock",
-    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi_app",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timeapi_app/main.js",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timeapi/script.js",
     "size": 2,
     "featured": true
   },
@@ -28,7 +28,7 @@
     "description": "Read and display files from your SD card storage",
     "icon": "fa-sd-card",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/sd_reader",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/sd_reader/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/sd_reader/script.js",
     "size": 1,
     "featured": false
   },
@@ -39,7 +39,7 @@
     "description": "Show current weather conditions and forecast",
     "icon": "fa-cloud-sun",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/weather",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/weather/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/weather/script.js",
     "size": 3,
     "featured": true
   },
@@ -50,7 +50,7 @@
     "description": "Beautiful digital clock with customizable themes",
     "icon": "fa-clock",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/clock",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/clock/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/clock/script.js",
     "size": 2,
     "featured": false
   },
@@ -61,7 +61,7 @@
     "description": "Monitor system performance and resource usage",
     "icon": "fa-chart-line",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/monitor",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/monitor/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/monitor/script.js",
     "size": 2,
     "featured": false
   },
@@ -72,7 +72,7 @@
     "description": "Classic snake game with touch controls",
     "icon": "fa-gamepad",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/snake",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/games/snake.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/snake/script.js",
     "size": 4,
     "featured": true
   },
@@ -83,7 +83,7 @@
     "description": "Control your favorite music streaming services",
     "icon": "fa-music",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/music",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/music/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/music/script.js",
     "size": 3,
     "featured": false
   },
@@ -94,18 +94,95 @@
     "description": "Centralized notification hub for all your services",
     "icon": "fa-bell",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/notifications",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/notifications/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/notifications/script.js",
     "size": 3,
     "featured": true
   },
   {
-    "name": "Calculator",
-    "id": "calculator",
+    "name": "Teleprompter",
+    "id": "teleprompter",
+    "category": "productivity",
+    "description": "Scrolling text display for presentations and speeches",
+    "icon": "fa-scroll",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/teleprompter",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/teleprompter/script.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "Steam Connect",
+    "id": "steam_connect",
+    "category": "games",
+    "description": "Display Steam profile, friends online, and game activity",
+    "icon": "fa-steam",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/steam",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/steam/script.js",
+    "size": 3,
+    "featured": true
+  },
+  {
+    "name": "Stock Ticker",
+    "id": "stock_ticker",
+    "category": "productivity",
+    "description": "Real-time stock prices and market information",
+    "icon": "fa-chart-line",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/stocks",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/stocks/script.js",
+    "size": 3,
+    "featured": true
+  },
+  {
+    "name": "Pomodoro Timer",
+    "id": "pomodoro",
+    "category": "productivity",
+    "description": "Focus timer with work and break intervals for productivity",
+    "icon": "fa-p",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/pomodoro",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/pomodoro/script.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "RSS Reader",
+    "id": "rss_reader",
+    "category": "productivity",
+    "description": "Display latest news and updates from RSS feeds",
+    "icon": "fa-rss",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/rss",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/rss/script.js",
+    "size": 3,
+    "featured": false
+  },
+  {
+    "name": "IoT Monitor",
+    "id": "iot_monitor",
     "category": "utilities",
-    "description": "Simple calculator with basic math operations",
-    "icon": "fa-calculator",
-    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/calculator",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/main.js",
+    "description": "Monitor and control IoT devices and sensors",
+    "icon": "fa-microchip",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/iot",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/iot/script.js",
+    "size": 4,
+    "featured": true
+  },
+  {
+    "name": "Bid Watcher",
+    "id": "bid_watcher",
+    "category": "productivity",
+    "description": "Track auction bids and marketplace listings",
+    "icon": "fa-gavel",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/auctions",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/auctions/script.js",
+    "size": 3,
+    "featured": false
+  },
+  {
+    "name": "Reminders",
+    "id": "reminders",
+    "category": "productivity",
+    "description": "Personal reminder system with notifications and alerts",
+    "icon": "fa-calendar-days",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/reminders",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/reminders/script.js",
     "size": 2,
     "featured": false
   },
@@ -116,7 +193,7 @@
     "description": "Countdown timer and stopwatch for productivity",
     "icon": "fa-stopwatch",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timer",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timer/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/timer/script.js",
     "size": 2,
     "featured": false
   },
@@ -127,8 +204,49 @@
     "description": "Display your social media feeds and updates",
     "icon": "fa-hashtag",
     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/social",
-    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/main.js",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/social/script.js",
     "size": 4,
     "featured": false
+  },
+  {
+    "name": "Calculator",
+    "id": "calculator",
+    "category": "utilities",
+    "description": "Basic calculator with arithmetic operations",
+    "icon": "fa-calculator",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/calculator",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/calculator/script.js",
+    "size": 2,
+    "featured": false
+  },
+  {
+    "name": "Dual Clock",
+    "id": "dual_clock",
+    "category": "productivity",
+    "description": "Display two time zones simultaneously with automatic sync",
+    "icon": "fa-clock",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/dual_clock",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/dual_clock/script.js",
+    "size": 3,
+    "featured": true
+  },
+  {
+    "name": "MQTT Notifications",
+    "id": "mqtt",
+    "category": "productivity",
+    "description": "Display real-time notifications from any MQTT-enabled device or service. Supports JSON and plain text messages.",
+    "icon": "fa-bell",
+    "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/mqtt_notifications",
+    "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/mqtt_notifications/script.js",
+    "size": 6,
+    "featured": true,
+    "requires_mqtt": true,
+    "install_config": {
+      "settings.mqtt.enabled": true,
+      "mqtt_broker": "broker.hivemq.com",
+      "mqtt_port": 1883,
+      "mqtt_topic": "webscreen/notifications",
+      "mqtt_client_id": "webscreen01"
+    }
   }
 ]
