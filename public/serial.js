@@ -205,15 +205,10 @@ class WebScreenSerial {
         if (!version) return false;
 
         // Parse version string (e.g., "2.0.0" or "1.5.2")
-        const parts = version.split('.').map(p => parseInt(p, 10));
-        const major = parts[0] || 0;
-        const minor = parts[1] || 0;
-        const patch = parts[2] || 0;
+        const major = parseInt(version.split('.')[0], 10) || 0;
 
         // /upload command is available from version 2.0.0 onwards
-        if (major > 2) return true;
-        if (major === 2 && (minor > 0 || patch >= 0)) return true;
-        return false;
+        return major >= 2;
     }
 
     // Fallback upload method for older firmware using /write command
@@ -269,8 +264,10 @@ class WebScreenSerial {
                 await new Promise(resolve => setTimeout(resolve, 30));
             }
 
-            // End file write
+            // End file write and wait for the device's saved/failed line
+            // (register the watcher before END so the result can't be missed)
             await new Promise(resolve => setTimeout(resolve, 100));
+            const ack = this.waitForUploadResult();
             await this.sendCommand('END');
 
             // Final progress update
@@ -278,8 +275,7 @@ class WebScreenSerial {
                 onProgress(totalSize, totalSize);
             }
 
-            // Wait for file to be finalized
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await ack; // throws if the device reported an upload failure
 
             console.log('uploadFileUsingWrite: Upload complete for', filename);
             return true;
@@ -364,6 +360,50 @@ class WebScreenSerial {
     }
 
     async listFiles(path = '/') {
+        // Fast path: newer firmware answers '/ls <path> json' with a single
+        // machine-readable line. Falls back to legacy text parsing.
+        const jsonResult = await this.listFilesJson(path);
+        if (jsonResult !== null) return jsonResult;
+        return this.listFilesLegacy(path);
+    }
+
+    async listFilesJson(path) {
+        return new Promise((resolve) => {
+            let resolved = false;
+            const collectorId = 'filesjson_' + Date.now();
+            const finish = (value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                resolve(value);
+            };
+
+            const collector = (line) => {
+                if (line.startsWith('{"path":')) {
+                    try {
+                        const obj = JSON.parse(line);
+                        finish((obj.entries || []).map(e => ({
+                            type: e.dir ? 'dir' : 'file',
+                            name: e.name,
+                            size: e.size || 0
+                        })));
+                    } catch (err) {
+                        finish(null);
+                    }
+                } else if (line.includes('Cannot open directory') || line.includes('Unknown command')) {
+                    // Old firmware treats '<path> json' as a literal path — fall back
+                    finish(null);
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand(`/ls ${path} json`).catch(() => finish(null));
+
+            setTimeout(() => finish(null), 1500);
+        });
+    }
+
+    async listFilesLegacy(path = '/') {
         return new Promise((resolve) => {
             const files = [];
             let headerSeen = false;
@@ -372,8 +412,6 @@ class WebScreenSerial {
 
             const collector = (line) => {
                 if (resolved) return;
-
-                console.log('listFiles parsing line:', line);
 
                 // Skip empty lines and prompts
                 if (!line.trim() || line.includes('WebScreen>')) return;
@@ -596,8 +634,10 @@ class WebScreenSerial {
                 }
             }
 
-            // End file write
+            // End file write and wait for the device's saved/failed line
+            // (register the watcher before END so the result can't be missed)
             await new Promise(resolve => setTimeout(resolve, 100));
+            const ack = this.waitForUploadResult();
             await this.sendCommand('END');
 
             // Final progress update
@@ -605,14 +645,40 @@ class WebScreenSerial {
                 onProgress(totalSize, totalSize);
             }
 
-            // Wait for file to be finalized
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await ack; // throws if the device reported an upload failure
 
             console.log('uploadFile: Upload complete for', filename);
             return true;
         } finally {
             this.isUploading = false;
         }
+    }
+
+    // Wait for the firmware's upload result line after sending END.
+    // Resolves with the status line ('[OK] File saved: ...' / 'Script saved:'),
+    // null on timeout (older firmware), or rejects on an upload error.
+    waitForUploadResult(timeoutMs = 8000) {
+        return new Promise((resolve, reject) => {
+            let resolved = false;
+            const collectorId = 'upresult_' + Date.now();
+            const finish = (fn, value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                fn(value);
+            };
+
+            const collector = (line) => {
+                if (line.includes('File saved:') || line.includes('Script saved:')) {
+                    finish(resolve, line);
+                } else if (line.includes('Upload failed') || line.includes('Upload aborted')) {
+                    finish(reject, new Error(line.replace('[ERROR]', '').trim()));
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            setTimeout(() => finish(resolve, null), timeoutMs);
+        });
     }
 
     arrayBufferToBase64(buffer) {
@@ -640,8 +706,6 @@ class WebScreenSerial {
 
             const collector = (line) => {
                 if (endDetected) return;
-
-                console.log('readFile parsing line:', line.substring(0, 100), 'collecting:', collecting);
 
                 // Skip prompts
                 if (line.includes('WebScreen>') && !line.includes(filename)) {
@@ -684,7 +748,6 @@ class WebScreenSerial {
                 // Collect content lines
                 if (collecting) {
                     content += line + '\n';
-                    console.log('readFile: Added line, content now:', content.length, 'chars');
                 }
             };
 
@@ -707,9 +770,125 @@ class WebScreenSerial {
         });
     }
 
-    async loadApp(filename) {
-        await this.sendCommand(`/load ${filename}`);
+    // Load/run an app. With save=true the firmware persists it as the
+    // default script in webscreen.json (/load <file> save).
+    async loadApp(filename, save = false) {
+        await this.sendCommand(save ? `/load ${filename} save` : `/load ${filename}`);
         return true;
+    }
+
+    // Evaluate a JS snippet inside the running app (firmware /eval, max 255 chars).
+    // Resolves with the result text (lines arrive prefixed "[EVAL] "), or throws
+    // on a firmware-side error ([ERROR] ...).
+    async evalJs(code) {
+        code = code.trim();
+        if (!code) throw new Error('Empty snippet');
+        if (code.length > 255) throw new Error('Snippet longer than 255 chars');
+
+        return new Promise((resolve, reject) => {
+            let resolved = false;
+            const collectorId = 'eval_' + Date.now();
+            const finish = (fn, value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                fn(value);
+            };
+
+            const collector = (line) => {
+                if (line.startsWith('[EVAL]')) {
+                    finish(resolve, line.substring(6).trim());
+                } else if (line.includes('[ERROR]')) {
+                    finish(reject, new Error(line.replace('[ERROR]', '').trim()));
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand(`/eval ${code}`).catch(err => finish(reject, err));
+
+            // Eval runs at the JS task's next safe point; allow a generous window
+            setTimeout(() => finish(reject, new Error('Eval timed out (no response)')), 5000);
+        });
+    }
+
+    // Fetch the JS error report (firmware /errors). Resolves with a structured
+    // object; null if the device did not answer.
+    async getErrors() {
+        return new Promise((resolve) => {
+            const report = {};
+            let collecting = false;
+            let resolved = false;
+            const collectorId = 'errors_' + Date.now();
+            const finish = () => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                resolve(collecting ? report : null);
+            };
+
+            const collector = (line) => {
+                if (resolved) return;
+                if (line.includes('=== JS Error Report ===')) {
+                    collecting = true;
+                    return;
+                }
+                if (!collecting) return;
+
+                if (line.startsWith('Last JS error')) {
+                    // "Last JS error (12s ago): msg" or "Last JS error: none"
+                    const m = line.match(/^Last JS error(?:\s*\((\d+)s ago\))?:\s*(.*)$/);
+                    if (m) {
+                        report.lastErrorAge = m[1] ? parseInt(m[1], 10) : null;
+                        report.lastError = m[2] === 'none' ? null : m[2];
+                    }
+                } else if (line.startsWith('Startup error:')) {
+                    report.startupError = line.substring(14).trim();
+                } else if (line.startsWith('Restart failures:')) {
+                    report.restartFailures = line.substring(17).trim();
+                } else if (line.startsWith('Auto-restart cycles:')) {
+                    report.autoRestartCycles = line.substring(20).trim();
+                } else if (line.startsWith('Safe mode:')) {
+                    report.safeMode = line.substring(10).trim().toUpperCase().startsWith('YES');
+                } else if (line.startsWith('Script:')) {
+                    // Last line of the report
+                    report.script = line.substring(7).trim();
+                    finish();
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand('/errors').catch(() => finish());
+
+            setTimeout(finish, 3000);
+        });
+    }
+
+    // Request a JS garbage collection (firmware /gc). Resolves with the
+    // status line text, or null on timeout.
+    async runGC() {
+        return new Promise((resolve) => {
+            let resolved = false;
+            const collectorId = 'gc_' + Date.now();
+            const finish = (value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                resolve(value);
+            };
+
+            const collector = (line) => {
+                if (line.includes('GC requested')) {
+                    finish(line.replace('[OK]', '').trim());
+                } else if (line.includes('Garbage collection unavailable')) {
+                    finish(line.replace('[ERROR]', '').trim());
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand('/gc').catch(() => finish(null));
+
+            setTimeout(() => finish(null), 3000);
+        });
     }
 
     async getHelp() {
@@ -746,9 +925,174 @@ class WebScreenSerial {
         return true;
     }
 
+    // Factory reset: newer firmware has /factory_reset (requires the literal
+    // 'confirm' argument); older firmware gets an emulation — delete the
+    // device config (webscreen.json) and reboot into fallback mode.
     async factoryReset() {
-        await this.sendCommand('/factory_reset');
-        return true;
+        return new Promise((resolve) => {
+            let resolved = false;
+            const collectorId = 'freset_' + Date.now();
+            const finish = (value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                resolve(value);
+            };
+
+            const collector = (line) => {
+                if (line.includes('Configuration deleted')) {
+                    finish(true);
+                } else if (line.includes('Unknown command')) {
+                    // Old firmware — emulate with /rm + /reboot
+                    this.sendCommand('/rm /webscreen.json')
+                        .then(() => new Promise(r => setTimeout(r, 500)))
+                        .then(() => this.sendCommand('/reboot'))
+                        .then(() => finish(true))
+                        .catch(() => finish(false));
+                } else if (line.includes('[ERROR]')) {
+                    finish(false);
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand('/factory_reset confirm').catch(() => finish(false));
+
+            setTimeout(() => finish(false), 8000);
+        });
+    }
+
+    // Create a directory on the SD card (firmware /mkdir)
+    async makeDirectory(path) {
+        return new Promise((resolve, reject) => {
+            let resolved = false;
+            const collectorId = 'mkdir_' + Date.now();
+            const finish = (fn, value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                fn(value);
+            };
+
+            const collector = (line) => {
+                if (line.includes('Directory created')) {
+                    finish(resolve, true);
+                } else if (line.includes('Unknown command')) {
+                    finish(reject, new Error('Firmware does not support /mkdir — please update'));
+                } else if (line.includes('[ERROR]')) {
+                    finish(reject, new Error(line.replace('[ERROR]', '').trim()));
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand(`/mkdir ${path}`).catch(err => finish(reject, err));
+
+            setTimeout(() => finish(reject, new Error('No response to /mkdir')), 3000);
+        });
+    }
+
+    // Download any file (text or binary) via the firmware's base64 /download
+    // stream. Resolves with a Uint8Array, or null if unsupported/failed
+    // (callers can fall back to the text-only /cat path).
+    async downloadFileBase64(filename) {
+        return new Promise((resolve) => {
+            let collecting = false;
+            let b64 = '';
+            let resolved = false;
+            const collectorId = 'dl_' + Date.now();
+            const finish = (value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                resolve(value);
+            };
+
+            const collector = (line) => {
+                if (line.startsWith('=== DOWNLOAD') && line.includes('SIZE')) {
+                    collecting = true;
+                    return;
+                }
+                if (line.includes('=== DOWNLOAD END ===')) {
+                    try {
+                        const bin = atob(b64);
+                        const bytes = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                        finish(bytes);
+                    } catch (err) {
+                        finish(null);
+                    }
+                    return;
+                }
+                if (line.includes('Unknown command') || line.includes('[ERROR]')) {
+                    finish(null);
+                    return;
+                }
+                if (collecting && /^[A-Za-z0-9+/=]+$/.test(line)) {
+                    b64 += line;
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand(`/download ${filename}`).catch(() => finish(null));
+
+            // Large files at USB-CDC speed still finish well inside this
+            setTimeout(() => finish(null), 30000);
+        });
+    }
+
+    // Capture the device screen (firmware /screenshot). Resolves with
+    // { width, height, swap, bytes } where bytes is raw RGB565 pixel data.
+    async takeScreenshot() {
+        return new Promise((resolve, reject) => {
+            let header = null;
+            let b64 = '';
+            let resolved = false;
+            const collectorId = 'shot_' + Date.now();
+            const finish = (fn, value) => {
+                if (resolved) return;
+                resolved = true;
+                this.activeCollectors.delete(collectorId);
+                fn(value);
+            };
+
+            const collector = (line) => {
+                const m = line.match(/^=== SCREENSHOT (\d+)x(\d+) (RGB565(?:_SWAP)?) ===$/);
+                if (m) {
+                    header = { width: parseInt(m[1], 10), height: parseInt(m[2], 10), swap: m[3].endsWith('_SWAP') };
+                    return;
+                }
+                if (line.includes('=== SCREENSHOT END ===')) {
+                    if (!header) {
+                        finish(reject, new Error('Malformed screenshot stream'));
+                        return;
+                    }
+                    try {
+                        const bin = atob(b64);
+                        const bytes = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                        finish(resolve, { ...header, bytes });
+                    } catch (err) {
+                        finish(reject, new Error('Failed to decode screenshot data'));
+                    }
+                    return;
+                }
+                if (line.includes('Unknown command')) {
+                    finish(reject, new Error('Firmware does not support /screenshot — please update'));
+                    return;
+                }
+                if (line.includes('[ERROR]')) {
+                    finish(reject, new Error(line.replace('[ERROR]', '').trim()));
+                    return;
+                }
+                if (header && /^[A-Za-z0-9+/=]+$/.test(line)) {
+                    b64 += line;
+                }
+            };
+
+            this.activeCollectors.set(collectorId, collector);
+            this.sendCommand('/screenshot').catch(err => finish(reject, err));
+
+            setTimeout(() => finish(reject, new Error('Screenshot timed out')), 30000);
+        });
     }
 
     async backup() {
@@ -792,8 +1136,6 @@ class WebScreenSerial {
             const collector = (line) => {
                 if (resolved) return;
 
-                console.log('getConfig parsing line for', key + ':', line);
-
                 // Try multiple patterns to match config value
                 // Pattern 1: key = value
                 if (line.includes(`${key} =`) || line.includes(`${key}=`)) {
@@ -818,14 +1160,6 @@ class WebScreenSerial {
                         resolve(value);
                         return;
                     }
-                }
-
-                // Pattern 3: Just the value on its own line after the key
-                // (for simple responses like "MySSID")
-                if (line.trim() && !line.includes('config') && !line.includes('Error') &&
-                    !line.includes('=') && !line.includes(':') && line.trim().length < 100) {
-                    // This might be just the value
-                    console.log('getConfig: Possible value for', key, ':', line.trim());
                 }
 
                 // Error handling
@@ -909,17 +1243,6 @@ class WebScreenSerial {
                 }
             }, 3000);
         });
-    }
-
-    // Helper to parse device info
-    parseDeviceInfo(line) {
-        const info = {};
-        const parts = line.split(',');
-        parts.forEach(part => {
-            const [key, value] = part.split(':').map(s => s.trim());
-            info[key] = value;
-        });
-        return info;
     }
 
     // Check if Web Serial API is supported

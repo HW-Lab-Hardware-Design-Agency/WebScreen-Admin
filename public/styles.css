@@ -1090,6 +1090,13 @@ body {
     border-color: var(--primary-color);
 }
 
+/* Toggled state (e.g. JS REPL mode) */
+.console-action-btn.active {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
 .console-body {
     padding: 0 !important;
     overflow: hidden;

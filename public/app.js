@@ -512,6 +512,7 @@ class WebScreenAdmin {
         this.commandHistory = [];
         this.historyIndex = -1;
         this.currentInput = '';
+        this.replMode = false; // when true, non-slash console input is sent as /eval
 
         // Loading overlay state
         this.waitingForScriptExecution = false;
@@ -724,7 +725,22 @@ class WebScreenAdmin {
     }
 
     writePrompt() {
-        this.terminal.write('\x1b[1;32mWebScreen\x1b[0m\x1b[1;37m>\x1b[0m ');
+        if (this.replMode) {
+            this.terminal.write('\x1b[1;35mjs\x1b[0m\x1b[1;37m>\x1b[0m ');
+        } else {
+            this.terminal.write('\x1b[1;32mWebScreen\x1b[0m\x1b[1;37m>\x1b[0m ');
+        }
+    }
+
+    toggleReplMode() {
+        this.replMode = !this.replMode;
+        const btn = document.getElementById('replToggleBtn');
+        btn?.classList.toggle('active', this.replMode);
+        this.writeToTerminal(this.replMode
+            ? '\r\n\x1b[35mJS REPL mode ON — input is evaluated inside the running app via /eval (max 255 chars). Slash commands still work.\x1b[0m\r\n'
+            : '\r\n\x1b[33mJS REPL mode OFF — back to raw serial commands.\x1b[0m\r\n');
+        this.currentInput = '';
+        this.writePrompt();
     }
 
     writeToTerminal(text) {
@@ -735,6 +751,14 @@ class WebScreenAdmin {
 
     async sendTerminalCommand(command) {
         try {
+            // In REPL mode, wrap plain input as a live /eval into the running app
+            if (this.replMode && !command.startsWith('/')) {
+                if (command.length > 255) {
+                    this.writeToTerminal('\x1b[31mSnippet too long for /eval (max 255 chars)\x1b[0m\r\n');
+                    return;
+                }
+                command = `/eval ${command}`;
+            }
             await this.serial.sendCommand(command);
         } catch (error) {
             this.writeToTerminal(`\x1b[31mError: ${error.message}\x1b[0m\r\n`);
@@ -766,8 +790,23 @@ class WebScreenAdmin {
         document.getElementById('factoryResetBtn')?.addEventListener('click', () => this.factoryReset());
         document.getElementById('refreshInfoBtn')?.addEventListener('click', () => this.refreshDeviceInfo());
 
+        // App Health
+        document.getElementById('checkErrorsBtn')?.addEventListener('click', () => this.checkErrors());
+        document.getElementById('runGCBtn')?.addEventListener('click', () => this.runGarbageCollection());
+
+        // Screenshot
+        document.getElementById('screenshotBtn')?.addEventListener('click', () => this.captureScreenshot());
+        document.getElementById('closeScreenshotModal')?.addEventListener('click', () => {
+            document.getElementById('screenshotModal')?.classList.remove('active');
+        });
+        document.getElementById('downloadScreenshotBtn')?.addEventListener('click', () => this.downloadScreenshotPng());
+
+        // File Manager toolbar
+        document.getElementById('newFolderBtn')?.addEventListener('click', () => this.createNewFolder());
+
         // Serial Console
         document.getElementById('clearConsoleBtn')?.addEventListener('click', () => this.clearTerminal());
+        document.getElementById('replToggleBtn')?.addEventListener('click', () => this.toggleReplMode());
 
         // Marketplace
         document.querySelectorAll('.category-btn').forEach(btn => {
@@ -823,7 +862,6 @@ class WebScreenAdmin {
         }
 
         // File actions
-        document.getElementById('newFolderBtn')?.addEventListener('click', () => this.createNewFolder());
         document.getElementById('refreshFilesBtn')?.addEventListener('click', () => this.refreshFiles());
     }
 
@@ -991,6 +1029,9 @@ class WebScreenAdmin {
                 this.updateSDCardDependentSections();
             }
 
+            // Populate the App Health card (silently — no toasts on auto-refresh)
+            await this.checkErrors(true);
+
             // Load files and config only if SD card is available
             if (this.sdCardAvailable) {
                 await this.refreshFiles();
@@ -1133,11 +1174,11 @@ class WebScreenAdmin {
             return;
         }
 
-        if (confirm('Are you sure you want to factory reset the device? This will erase all settings and data.')) {
+        if (confirm('Factory reset deletes the device configuration (webscreen.json) from the SD card and reboots into fallback mode. App files are kept. Continue?')) {
             if (confirm('This action cannot be undone. Continue with factory reset?')) {
                 try {
                     await this.serial.factoryReset();
-                    this.showToast('Device reset to factory settings', 'success');
+                    this.showToast('Config deleted — device is rebooting into fallback mode', 'success');
                 } catch (error) {
                     this.showToast('Failed to reset device', 'error');
                 }
@@ -1156,10 +1197,141 @@ class WebScreenAdmin {
         this.showToast('Device info refreshed', 'success');
     }
 
-    // Marketplace functions
-    loadAppsFromConfig() {
+    // App Health: fetch the JS error report (firmware /errors)
+    async checkErrors(silent = false) {
+        if (!this.serial.connected) {
+            if (!silent) this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
         try {
-            // Embedded apps configuration
+            const report = await this.serial.getErrors();
+            if (!report) {
+                if (!silent) this.showToast('No error report received (firmware without /errors?)', 'warning');
+                return;
+            }
+
+            const set = (id, value, danger = false) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = value;
+                el.style.color = danger ? 'var(--danger-color, #dc3545)' : '';
+            };
+
+            set('jsScript', report.script || '-');
+            set('jsSafeMode', report.safeMode ? 'YES — app parked' : 'no', report.safeMode);
+            set('jsRestartFailures', report.restartFailures || '-');
+            set('jsAutoRestartCycles', report.autoRestartCycles || '-');
+
+            let errText = 'none';
+            if (report.lastError) {
+                errText = report.lastError + (report.lastErrorAge !== null ? ` (${report.lastErrorAge}s ago)` : '');
+            }
+            set('jsLastError', errText, !!report.lastError);
+
+            if (!silent) {
+                this.showToast(
+                    report.lastError ? 'Device reported a JS error' : 'No JS errors reported',
+                    report.lastError ? 'warning' : 'success'
+                );
+            }
+        } catch (error) {
+            if (!silent) this.showToast('Failed to fetch error report', 'error');
+        }
+    }
+
+    // Capture the device screen via /screenshot and show it in a modal
+    async captureScreenshot() {
+        if (!this.serial.connected) {
+            this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        const btn = document.getElementById('screenshotBtn');
+        const original = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Capturing...</span>';
+        }
+
+        try {
+            const shot = await this.serial.takeScreenshot();
+
+            // Decode RGB565 (optionally byte-swapped) into a canvas
+            const canvas = document.getElementById('screenshotCanvas');
+            canvas.width = shot.width;
+            canvas.height = shot.height;
+            const ctx = canvas.getContext('2d');
+            const img = ctx.createImageData(shot.width, shot.height);
+            const bytes = shot.bytes;
+            for (let i = 0, p = 0; i + 1 < bytes.length && p < img.data.length; i += 2, p += 4) {
+                const c = shot.swap ? (bytes[i] << 8) | bytes[i + 1] : (bytes[i + 1] << 8) | bytes[i];
+                img.data[p]     = Math.round(((c >> 11) & 0x1F) * 255 / 31);
+                img.data[p + 1] = Math.round(((c >> 5) & 0x3F) * 255 / 63);
+                img.data[p + 2] = Math.round((c & 0x1F) * 255 / 31);
+                img.data[p + 3] = 255;
+            }
+            ctx.putImageData(img, 0, 0);
+
+            document.getElementById('screenshotModal')?.classList.add('active');
+        } catch (error) {
+            this.showToast(`Screenshot failed: ${error.message}`, 'error');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        }
+    }
+
+    downloadScreenshotPng() {
+        const canvas = document.getElementById('screenshotCanvas');
+        if (!canvas || !canvas.width) return;
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = `webscreen-${Date.now()}.png`;
+        a.click();
+    }
+
+    // App Health: request a JS garbage collection (firmware /gc)
+    async runGarbageCollection() {
+        if (!this.serial.connected) {
+            this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        try {
+            const result = await this.serial.runGC();
+            if (result) {
+                this.showToast(result, result.includes('unavailable') ? 'warning' : 'success');
+            } else {
+                this.showToast('No response to /gc', 'error');
+            }
+        } catch (error) {
+            this.showToast('Failed to run garbage collection', 'error');
+        }
+    }
+
+    // Marketplace functions
+    // Load the app catalog from apps.json; falls back to the embedded copy
+    // below when fetch is unavailable (e.g. opened via file://).
+    async loadAppsFromConfig() {
+        try {
+            const resp = await fetch('apps.json', { cache: 'no-cache' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const apps = await resp.json();
+            if (!Array.isArray(apps) || apps.length === 0) throw new Error('empty catalog');
+            this.availableApps = apps;
+            this.renderApps();
+            console.log(`Loaded ${apps.length} apps from apps.json`);
+        } catch (error) {
+            console.warn('Could not fetch apps.json, using embedded catalog:', error.message);
+            this.loadFallbackApps();
+        }
+    }
+
+    loadFallbackApps() {
+        // Embedded copy of the catalog — keep in sync with public/apps.json
             this.availableApps = [
                 {
                     "name": "Blink LED",
@@ -1412,53 +1584,6 @@ class WebScreenAdmin {
                     }
                 }
             ];
-
-            this.renderApps();
-            console.log(`Loaded ${this.availableApps.length} apps from embedded configuration`);
-        } catch (error) {
-            console.error('Failed to load apps from configuration:', error);
-            this.showToast('Failed to load app catalog', 'error');
-            this.loadFallbackApps();
-        }
-    }
-
-    loadFallbackApps() {
-        // Minimal fallback apps if JSON loading fails
-        this.availableApps = [
-            {
-                name: 'Blink LED',
-                id: 'blink',
-                category: 'utilities',
-                description: 'Simple LED blinking example to test your WebScreen setup',
-                icon: 'fa-lightbulb',
-                github_url: 'https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/blink',
-                main_file: null,
-                size: 1,
-                featured: true
-            },
-            {
-                name: 'Time API',
-                id: 'timeapi',
-                category: 'productivity',
-                description: 'Display current time and date from world time API',
-                icon: 'fa-clock',
-                github_url: 'https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/timeapi',
-                main_file: null,
-                size: 2,
-                featured: true
-            },
-            {
-                name: 'System Monitor',
-                id: 'system_monitor',
-                category: 'utilities',
-                description: 'Monitor system performance and resource usage',
-                icon: 'fa-chart-line',
-                github_url: 'https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/monitor',
-                main_file: null,
-                size: 2,
-                featured: false
-            }
-        ];
         this.renderApps();
     }
 
@@ -1484,13 +1609,14 @@ class WebScreenAdmin {
             );
         }
 
+        // Catalog data may be fetched remotely — escape everything rendered
         grid.innerHTML = apps.map(app => `
-            <div class="app-card" data-app-id="${app.id}">
+            <div class="app-card" data-app-id="${this.escapeHtml(app.id)}">
                 <div class="app-card-icon">
-                    <i class="fas ${app.icon}"></i>
+                    <i class="fas ${this.escapeHtml(app.icon)}"></i>
                 </div>
-                <div class="app-card-name">${app.name}</div>
-                <div class="app-card-category">${app.category}</div>
+                <div class="app-card-name">${this.escapeHtml(app.name)}</div>
+                <div class="app-card-category">${this.escapeHtml(app.category)}</div>
             </div>
         `).join('');
 
@@ -1537,8 +1663,8 @@ class WebScreenAdmin {
                     <div style="font-weight: 600; margin-bottom: 6px;"><i class="fas fa-cog"></i> MQTT Configuration</div>
                     <div style="color: var(--text-secondary, #666);">
                         After installing, go to <strong>Settings</strong> to update the MQTT broker settings.
-                        Default broker: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${app.install_config.mqtt_broker || 'broker.hivemq.com'}</code>
-                        Topic: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${app.install_config.mqtt_topic || 'webscreen/notifications'}</code>
+                        Default broker: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(app.install_config.mqtt_broker || 'broker.hivemq.com')}</code>
+                        Topic: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(app.install_config.mqtt_topic || 'webscreen/notifications')}</code>
                     </div>
                 </div>`;
             document.getElementById('modalAppDesc').insertAdjacentHTML('afterend', noteHtml);
@@ -1836,18 +1962,24 @@ class WebScreenAdmin {
             fileList.innerHTML = `
                 <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
                     <i class="fas fa-folder-open" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
-                    No files found in ${this.currentPath}
+                    No files found in ${this.escapeHtml(this.currentPath)}
                 </div>`;
             return;
         }
 
+        // File names come from the device's /ls output — escape them
         fileList.innerHTML = this.files.map(file => `
-            <div class="file-item" data-name="${file.name}" data-type="${file.type}">
+            <div class="file-item" data-name="${this.escapeHtml(file.name)}" data-type="${file.type}">
                 <i class="fas ${file.type === 'dir' ? 'fa-folder' : this.getFileIcon(file.name)}"></i>
-                <span class="file-item-name">${file.name}</span>
+                <span class="file-item-name">${this.escapeHtml(file.name)}</span>
                 <span class="file-item-size">${this.formatFileSize(file.size)}</span>
                 <div class="file-item-actions">
                     ${file.type === 'file' ? `
+                        ${file.name.toLowerCase().endsWith('.js') ? `
+                        <button class="btn-icon" data-action="run" title="Run on device (in-place, no reboot)">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        ` : ''}
                         <button class="btn-icon" data-action="download" title="Download">
                             <i class="fas fa-download"></i>
                         </button>
@@ -1880,6 +2012,8 @@ class WebScreenAdmin {
                         this.deleteFile(name);
                     } else if (action === 'download') {
                         this.downloadFile(name);
+                    } else if (action === 'run') {
+                        this.runScriptFile(name);
                     }
                 });
             });
@@ -2020,16 +2154,78 @@ class WebScreenAdmin {
         }
     }
 
-    async downloadFile(filename) {
-        // TODO: Implement file download
-        this.showToast('Download feature coming soon', 'info');
+    // Run a JS file in place via /load — no reboot needed (firmware 2.x)
+    async runScriptFile(filename) {
+        if (!this.serial.connected) return;
+
+        try {
+            await this.serial.loadApp(this.currentPath + filename);
+            this.showToast(`Loading ${filename} on device...`, 'info');
+        } catch (error) {
+            this.showToast('Failed to run script', 'error');
+        }
     }
 
-    createNewFolder() {
+    async downloadFile(filename) {
+        if (!this.serial.connected) return;
+
+        this.showToast(`Reading ${filename}...`, 'info');
+        try {
+            // Preferred: binary-safe base64 /download (newer firmware)
+            const bytes = await this.serial.downloadFileBase64(this.currentPath + filename);
+            if (bytes) {
+                this.saveBlobAs(new Blob([bytes], { type: 'application/octet-stream' }), filename);
+                this.showToast('File downloaded', 'success');
+                return;
+            }
+
+            // Fallback for older firmware: /cat works for text files only
+            const textExtensions = ['.js', '.json', '.txt', '.html', '.css', '.xml', '.csv', '.md', '.log'];
+            const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+            if (!textExtensions.includes(ext)) {
+                this.showToast('Binary download needs a firmware with /download — text files only on this device', 'warning');
+                return;
+            }
+            const content = await this.serial.readFile(this.currentPath + filename);
+            if (content === null) {
+                this.showToast('Failed to read file from device', 'error');
+                return;
+            }
+            this.saveBlobAs(new Blob([content], { type: 'text/plain' }), filename);
+            this.showToast('File downloaded', 'success');
+        } catch (error) {
+            this.showToast('Failed to download file', 'error');
+        }
+    }
+
+    saveBlobAs(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    async createNewFolder() {
+        if (!this.serial.connected || !this.sdCardAvailable) {
+            this.showToast('Connect a device with an SD card first', 'warning');
+            return;
+        }
+
         const name = prompt('Enter folder name:');
-        if (name) {
-            // TODO: Implement folder creation
-            this.showToast('Folder creation coming soon', 'info');
+        if (!name || !name.trim()) return;
+        if (/[\\:*?"<>|]/.test(name)) {
+            this.showToast('Folder name contains invalid characters', 'error');
+            return;
+        }
+
+        try {
+            await this.serial.makeDirectory(this.currentPath + name.trim());
+            this.showToast('Folder created', 'success');
+            this.refreshFiles();
+        } catch (error) {
+            this.showToast(`Failed to create folder: ${error.message}`, 'error');
         }
     }
 
@@ -2324,27 +2520,21 @@ class WebScreenAdmin {
                 });
             }
 
-            // Populate script/auto-start dropdown
+            // Populate auto-start dropdown from the current file list. Reads
+            // this.currentConfig.script to mark the saved choice as selected.
+            await this.populateAutoStartDropdown();
+
+            // If the device reports a script that isn't a file on the SD card
+            // (e.g. file deleted but config still points to it), surface it as
+            // a selected option anyway so the user can see and clear it.
             if (finalScript) {
                 const autoStartSelect = document.getElementById('autoStart');
-                console.log('loadCurrentConfig: Found autoStartSelect:', !!autoStartSelect);
-                if (autoStartSelect) {
-                    let optionExists = false;
-                    for (const option of autoStartSelect.options) {
-                        if (option.value === finalScript) {
-                            optionExists = true;
-                            option.selected = true;
-                            break;
-                        }
-                    }
-                    if (!optionExists) {
-                        const option = document.createElement('option');
-                        option.value = finalScript;
-                        option.textContent = finalScript;
-                        option.selected = true;
-                        autoStartSelect.appendChild(option);
-                    }
-                    console.log('loadCurrentConfig: Set auto-start script to:', finalScript);
+                if (autoStartSelect && ![...autoStartSelect.options].some(o => o.value === finalScript)) {
+                    const option = document.createElement('option');
+                    option.value = finalScript;
+                    option.textContent = finalScript + ' (missing on SD)';
+                    option.selected = true;
+                    autoStartSelect.appendChild(option);
                 }
             }
 
@@ -2426,6 +2616,7 @@ class WebScreenAdmin {
 
             const fieldId = `config-${fullPath.replace(/\./g, '-')}`;
             const labelText = getLabelForKey(key, path);
+            const esc = (v) => this.escapeHtml(v); // config values come from the device — escape them
 
             let fieldHtml = '';
 
@@ -2455,8 +2646,8 @@ class WebScreenAdmin {
                         <div class="config-field">
                             <label for="${fieldId}">${labelText}</label>
                             <div class="color-picker-wrapper">
-                                <input type="color" id="${fieldId}-picker" class="color-picker-input" data-config-path="${fullPath}" value="${value}">
-                                <input type="text" id="${fieldId}" class="form-control color-hex-input" data-config-path="${fullPath}" value="${value}" placeholder="#FFFFFF">
+                                <input type="color" id="${fieldId}-picker" class="color-picker-input" data-config-path="${fullPath}" value="${esc(value)}">
+                                <input type="text" id="${fieldId}" class="form-control color-hex-input" data-config-path="${fullPath}" value="${esc(value)}" placeholder="#FFFFFF">
                             </div>
                         </div>
                     `;
@@ -2466,7 +2657,7 @@ class WebScreenAdmin {
                         <div class="config-field">
                             <label for="${fieldId}">${labelText}</label>
                             <div class="password-input">
-                                <input type="password" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}" placeholder="Enter ${labelText.toLowerCase()}">
+                                <input type="password" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${esc(value)}" placeholder="Enter ${esc(labelText.toLowerCase())}">
                                 <button type="button" class="btn-icon toggle-password-btn">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -2478,7 +2669,7 @@ class WebScreenAdmin {
                     fieldHtml = `
                         <div class="config-field">
                             <label for="${fieldId}">${labelText}</label>
-                            <input type="text" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}">
+                            <input type="text" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${esc(value)}">
                         </div>
                     `;
                 }
@@ -2564,7 +2755,8 @@ class WebScreenAdmin {
         let html = '';
 
         // 1. GENERAL SECTION - WiFi + top-level simple properties
-        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone', 'display'];
+        // 'script' is rendered as a dedicated dropdown below; skip generic rendering
+        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone', 'display', 'script'];
         let generalFields = '';
 
         // WiFi fields
@@ -2572,11 +2764,17 @@ class WebScreenAdmin {
         generalFields += `
             <div class="config-field">
                 <label for="wifiSSID">WiFi Network (SSID)</label>
-                <input type="text" id="wifiSSID" class="form-control" data-config-path="settings.wifi.ssid" value="${wifiSsid}" placeholder="Enter WiFi network name">
+                <input type="text" id="wifiSSID" class="form-control" data-config-path="settings.wifi.ssid" value="${this.escapeHtml(wifiSsid)}" placeholder="Enter WiFi network name">
             </div>
             <div class="config-field">
                 <label for="wifiPassword">WiFi Password</label>
                 <input type="password" id="wifiPassword" class="form-control" placeholder="Enter WiFi password">
+            </div>
+            <div class="config-field">
+                <label for="autoStart">Auto-start Script</label>
+                <select id="autoStart" class="form-control" data-config-path="script">
+                    <option value="">None</option>
+                </select>
             </div>
             <div class="network-status" style="margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">
                 <div class="status-item">
@@ -2893,10 +3091,15 @@ class WebScreenAdmin {
         }
     }
 
+    // Escape a value for safe interpolation into HTML — covers both text
+    // and quoted-attribute contexts (quotes included, unlike textContent).
     escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     // Toast notifications
