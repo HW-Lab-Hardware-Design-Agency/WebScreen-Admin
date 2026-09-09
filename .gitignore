@@ -1,0 +1,3 @@
+# Public contains application source, including new modules.
+!public/
+!public/**

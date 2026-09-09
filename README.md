@@ -1,222 +1,68 @@
-# WebScreen Admin - Visual Configuration Tool
+# WebScreen Admin
 
-A modern, user-friendly web application for configuring and managing WebScreen devices without any programming knowledge. Perfect for non-technical users who want to use and configure WebScreen with simple visual controls.
+A browser workspace for managing WebScreen devices: install apps, browse SD-card files, edit settings, and use the serial console.
 
-## Features
+## Run locally
 
-### 🎯 **Designed for Non-Technical Users**
-- **Visual Interface**: No command line or code required
-- **One-Click Actions**: Install apps, configure settings, manage files with simple clicks
-- **Guided Setup**: Step-by-step configuration with clear labels and descriptions
-- **Modern Design**: Beautiful, intuitive interface inspired by modern web applications
+This is a static site with no build step:
 
-### 📱 **Marketplace**
-- **Browse Applications**: Discover apps from the WebScreen-Awesome repository
-- **Categories**: Apps organized by type (Featured, Utilities, Games, Productivity, Social)
-- **Search**: Find apps quickly with the search function
-- **One-Click Install**: Install any app with a single click
-- **Auto-Updates**: Automatically shows new apps when added to the repository
-
-### 📂 **File Manager**
-- **Visual File Browser**: See all files on your WebScreen device
-- **Drag & Drop Upload**: Simply drag files to upload them
-- **File Actions**: Download, delete, and manage files easily
-- **Folder Navigation**: Browse through directories with clicks
-
-### ⚙️ **Device Settings**
-- **System Configuration**: Set device name, timezone, auto-start apps
-- **Network Setup**: Configure WiFi with a simple form
-- **Display Settings**: Adjust brightness, orientation, and timeout with sliders
-- **Live Preview**: See display changes in real-time
-
-### 🎛️ **Dashboard**
-- **Device Information**: View memory, storage, network status at a glance
-- **Quick Actions**: Restart, backup, factory reset with one click
-- **Current App**: See what's running and control it
-- **Status Monitoring**: Real-time connection and device status
-
-## Getting Started
-
-### Requirements
-- **Browser**: Chrome, Edge, or Opera (requires Web Serial API support)
-- **WebScreen Device**: Connected via USB cable
-
-### Installation
-1. No installation needed! Just open `index.html` in a supported browser
-2. The application runs entirely in your browser
-
-### Usage
-
-#### First Time Setup
-1. **Open the Admin Panel**
-   - Open `index.html` in Chrome, Edge, or Opera
-   - You'll see the beautiful dashboard interface
-
-2. **Connect Your WebScreen**
-   - Click the "Connect Device" button in the top right
-   - Select your WebScreen from the list
-   - The status will show "Connected" when ready
-
-3. **Configure WiFi**
-   - Go to "Network" in the sidebar
-   - Enter your WiFi network name and password
-   - Click "Connect to WiFi"
-   - Your device will restart and connect
-
-#### Installing Apps
-
-1. **Browse the Marketplace**
-   - Click "Marketplace" in the sidebar
-   - Browse by category or search for apps
-   - Click on any app to see details
-
-2. **Install an App**
-   - Click on an app card
-   - Review the app information
-   - Click "Install" button
-   - The app will download and start automatically
-
-#### Managing Files
-
-1. **Upload Files**
-   - Go to "Files" in the sidebar
-   - Drag and drop files onto the upload area
-   - Or click "Browse Files" to select files
-
-2. **Browse Files**
-   - See all files on your device
-   - Click folders to navigate
-   - Use action buttons to download or delete
-
-#### Configuring Settings
-
-1. **Settings**
-   - Go to "Settings" in the sidebar
-   - **General**: WiFi network name/password, auto-start script
-   - **Device**: Screen colors, display brightness (0-255 slider with real-time preview)
-   - **Time & Location**: Timezone configuration
-   - **Advanced**: Additional device settings
-   - Click "Save Settings" to persist all changes to the device
-
-## Interface Overview
-
-### Sidebar Navigation
-- **Dashboard**: Overview and quick actions
-- **Marketplace**: Browse and install applications
-- **Files**: Manage device files
-- **Settings**: System configuration (General, Device, Time & Location, Advanced)
-  - WiFi setup is in the General section
-  - Brightness control is in the Device section
-
-### Color-Coded Feedback
-- **Green**: Successful actions
-- **Blue**: Information messages
-- **Yellow**: Warnings
-- **Red**: Errors or important alerts
-
-## Features for Non-Technical Users
-
-### Simple Visual Controls
-- **No coding required**: Everything is point-and-click
-- **Clear labels**: Every setting has a descriptive label
-- **Visual feedback**: Toast notifications for all actions
-- **Confirmation dialogs**: Protection against accidental actions
-
-### Smart Defaults
-- **Pre-configured settings**: Works out of the box
-- **Automatic app discovery**: New apps appear automatically
-- **Smart categorization**: Apps organized by type
-- **Helpful placeholders**: Form fields show example values
-
-### Safety Features
-- **Confirmation prompts**: For critical actions like factory reset
-- **Connection status**: Always visible connection indicator
-- **Disabled controls**: Buttons disabled when not connected
-- **Clear error messages**: Understandable feedback when issues occur
-
-## Troubleshooting
-
-### Can't Connect to Device
-1. Make sure WebScreen is connected via USB
-2. Check that you're using Chrome, Edge, or Opera
-3. Try a different USB cable or port
-4. Restart your WebScreen device
-
-### Apps Won't Install
-1. Ensure device is connected
-2. Check available storage on device
-3. Try refreshing the page
-4. Verify internet connection for app downloads
-
-### WiFi Won't Connect
-1. Double-check network name (case sensitive)
-2. Verify password is correct
-3. Ensure network is 2.4GHz (not 5GHz only)
-4. Device will restart after WiFi configuration
-
-### Files Won't Upload
-1. Check file size (must be reasonable for device)
-2. Ensure device has available storage
-3. Try smaller files first
-4. Check file format compatibility
-
-## Technical Details
-
-### Architecture
-- **Pure Web Application**: No server or installation required
-- **Web Serial API**: Direct USB communication
-- **GitHub Integration**: Auto-loads apps from WebScreen-Awesome repository
-- **Modern JavaScript**: ES6+ with async/await
-- **Responsive Design**: Works on desktop and tablet
-
-### Browser Support
-- ✅ Chrome 89+
-- ✅ Edge 89+
-- ✅ Opera 75+
-- ❌ Firefox (no Web Serial API)
-- ❌ Safari (no Web Serial API)
-
-### File Structure
-```
-WebScreen-Admin/
-├── index.html        # Main application
-├── styles.css        # Modern, gradient-based styling
-├── app.js           # Application logic
-├── serial.js        # Serial communication
-├── assets/          # Images and icons
-└── README.md        # This documentation
+```sh
+python3 -m http.server 8765 --bind 127.0.0.1 --directory public
 ```
 
-## Design Philosophy
+Open <http://127.0.0.1:8765>. Chrome and Edge on desktop support USB connections through Web Serial. The deployed site must use HTTPS. You can browse the marketplace and preview settings without connecting a device.
 
-This admin interface was created with non-technical users in mind:
+Connect your WebScreen by USB, close Arduino Serial Monitor/Plotter and other programs using its port, then select **Connect Device**. Settings and file operations require an SD card. Configuration uploads require firmware with `/upload` support (2.0 or newer).
 
-- **Visual over textual**: Icons, colors, and visual feedback instead of text commands
-- **Progressive disclosure**: Advanced features hidden until needed
-- **Forgiving interactions**: Confirmation dialogs and undo options
-- **Consistent patterns**: Similar actions work the same way everywhere
-- **Modern aesthetics**: Beautiful gradients and smooth animations
+## Custom configuration
 
-## Contributing
+Open **Settings → Advanced → Add property**. Enter a property name, choose a type, and enter its value:
 
-We welcome contributions that make WebScreen even easier to use! Focus areas:
+| Property | Type | Example value |
+| --- | --- | --- |
+| `api_key` | Text | `your-key` |
+| `settings.weather.city` | Text | `Tokyo` |
+| `refresh_seconds` | Number | `30` |
+| `notifications_enabled` | Boolean | `false` |
+| `schedule` | JSON | `{"days":[1,2,3],"end":null}` |
 
-- **Simplifying workflows**: Making common tasks even easier
-- **Visual improvements**: Better icons, clearer layouts
-- **Error handling**: More helpful error messages
-- **Documentation**: Clearer instructions and tutorials
-- **Accessibility**: Support for screen readers and keyboard navigation
+Dots create nested objects. Escape a literal dot with a backslash, such as `sensor\.name`. Existing custom properties appear in Advanced, including arrays, null values, and empty objects. You can edit, rename, or remove them. Changes take effect only after **Save settings**.
 
-## Support
+The editor preserves other configuration properties and keeps values such as `0`, `false`, and empty text intact. Duplicate or overlapping paths and invalid values prevent saving. **View webscreen.json** previews the complete document, including any passwords it contains.
 
-- **WebScreen Hardware**: [CrowdSupply](https://www.crowdsupply.com/hw-media-lab/webscreen)
-- **GitHub Issues**: [Report problems or suggestions](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Software/issues)
-- **Community**: [WebScreen Website](https://webscreen.cc)
+Settings load directly from `/webscreen.json` after connecting, independently of dashboard statistics. Navigating between sections preserves edits; **Reload from device** discards edits only after confirmation. The saved Wi-Fi password fills the password field and is masked by default; use the eye button to show or hide it. Edit it to replace it, leave it blank to retain the saved value, or select **Clear saved password** to remove it. The timezone field also reads saved `system.timezone` and legacy `device.timezone` values when the top-level `timezone` is absent. Saves require a successful device read, an upload acknowledgement, and matching read-back data. Restart the device to apply saved configuration. Brightness updates while dragging, with paced commands and firmware confirmation. Live brightness works even if configuration loading fails; Save settings persists the selected value.
 
-## License
+Very large or deeply nested configurations remain subject to firmware limits. ArduinoJson 6 builds of the firmware use a 1 KB startup document; ArduinoJson 7 grows it dynamically. A successful file save verifies storage, not whether every custom setting is understood by the running app.
 
-This project is part of the WebScreen ecosystem and follows the same licensing terms.
+## Reliability and troubleshooting
 
----
+- Serial operations run sequentially so console commands cannot interrupt an upload. Disconnects cancel pending responses and reset connection capabilities.
+- Modern uploads use bounded base64 chunks for both text and binary files. Long source lines, Unicode, whitespace, and a literal `END` line are preserved.
+- Incomplete file responses and unconfirmed uploads report errors. Settings edits remain available after a failed save.
+- The interface still starts if browser storage or the terminal CDN is unavailable; a basic serial console is provided as a fallback.
+- If a port cannot open, close other applications using it and retry. On Linux, `fuser -v /dev/ttyACM0` identifies a program holding the port.
 
-**WebScreen Admin** - Making WebScreen accessible to everyone, regardless of technical expertise!
+## Development and tests
+
+`public/app.js` manages navigation, apps, files, and the dashboard. `public/settings.js` handles the settings UI; `public/config.js` provides configuration validation and merging. `public/serial.js` implements the device protocol. Styles and markup are in `public/styles.css` and `public/index.html`.
+
+Run the Node.js regression suite:
+
+```sh
+node --test tests/*.test.cjs
+```
+
+For browser checks, install Playwright outside the repository, start the local server above, and run with Chrome installed:
+
+```sh
+npm install --prefix /tmp/webscreen-admin-browser playwright
+PLAYWRIGHT_PATH=/tmp/webscreen-admin-browser/node_modules/playwright node tests/browser.test.mjs
+```
+
+Set `ADMIN_URL` to use another local server URL. Browser tests simulate the serial device and cover configuration round trips, validation, failure recovery, navigation, responsive layouts, and unavailable CDNs. They do not connect to physical USB hardware. Test affected workflows on a board before a release.
+
+## WebScreen
+
+[Website](https://webscreen.cc) · [Firmware and documentation](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Software) · [App collection](https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome)
+
+See [LICENSE](LICENSE) for licensing information.

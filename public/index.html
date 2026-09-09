@@ -56,7 +56,6 @@
     <meta property="article:tag" content="AMOLED">
 
     <!-- Favicon -->
-    <link rel="shortcut icon" href="assets/favicon.ico" type="image/x-icon">
 
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -66,8 +65,8 @@
 
     <!-- xterm.js Terminal -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
-    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="styles.css">
@@ -111,6 +110,7 @@
     </script>
 </head>
 <body>
+    <a class="skip-link" href="#mainContent">Skip to content</a>
     <!-- Header -->
     <header class="header">
         <div class="container">
@@ -121,15 +121,15 @@
                 </div>
                 <div class="connection-status">
                     <button id="connectBtn" class="btn btn-primary">
-                        <i class="fas fa-plug"></i>
+                        <i aria-hidden="true" class="fas fa-plug"></i>
                         Connect Device
                     </button>
                     <button id="themeToggle" class="theme-toggle" title="Toggle theme">
-                        <i class="fas fa-sun"></i>
+                        <i aria-hidden="true" class="fas fa-sun"></i>
                         <span class="theme-label">Light</span>
                     </button>
-                    <span class="status-indicator" id="statusIndicator">
-                        <i class="fas fa-circle"></i>
+                    <span class="status-indicator" id="statusIndicator" role="status">
+                        <i aria-hidden="true" class="fas fa-circle"></i>
                         <span id="statusText">Disconnected</span>
                     </span>
                 </div>
@@ -142,28 +142,28 @@
         <div class="container">
             <!-- Sidebar Navigation -->
             <aside class="sidebar">
-                <nav class="nav-menu">
-                    <div class="nav-item active" data-section="dashboard">
-                        <i class="fas fa-home"></i>
+                <nav class="nav-menu" aria-label="Main navigation">
+                    <button type="button" class="nav-item active" data-section="dashboard">
+                        <i aria-hidden="true" class="fas fa-home"></i>
                         <span>Dashboard</span>
-                    </div>
-                    <div class="nav-item" data-section="apps">
-                        <i class="fas fa-th"></i>
+                    </button>
+                    <button type="button" class="nav-item" data-section="apps">
+                        <i aria-hidden="true" class="fas fa-th"></i>
                         <span>Marketplace</span>
-                    </div>
-                    <div class="nav-item" data-section="files">
-                        <i class="fas fa-folder"></i>
+                    </button>
+                    <button type="button" class="nav-item" data-section="files">
+                        <i aria-hidden="true" class="fas fa-folder"></i>
                         <span>Files</span>
-                    </div>
-                    <div class="nav-item" data-section="config">
-                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button type="button" class="nav-item" data-section="config">
+                        <i aria-hidden="true" class="fas fa-cog"></i>
                         <span>Settings</span>
-                    </div>
+                    </button>
                 </nav>
             </aside>
 
             <!-- Content Area -->
-            <div class="content">
+            <div class="content" id="mainContent" tabindex="-1">
                 <!-- Dashboard Section -->
                 <section id="dashboard" class="section active">
                     <h2 class="section-title">Dashboard</h2>
@@ -172,7 +172,7 @@
                         <!-- Device Info Card -->
                         <div class="card">
                             <div class="card-header">
-                                <h3><i class="fas fa-microchip"></i> Device Information</h3>
+                                <h3><i aria-hidden="true" class="fas fa-microchip"></i> Device Information</h3>
                             </div>
                             <div class="card-body">
                                 <div class="info-grid">
@@ -215,7 +215,7 @@
                         <!-- System Stats Card -->
                         <div class="card">
                             <div class="card-header">
-                                <h3><i class="fas fa-chart-bar"></i> System Statistics</h3>
+                                <h3><i aria-hidden="true" class="fas fa-chart-bar"></i> System Statistics</h3>
                             </div>
                             <div class="card-body">
                                 <div class="info-grid">
@@ -262,28 +262,28 @@
                         <!-- Quick Actions Card -->
                         <div class="card">
                             <div class="card-header">
-                                <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+                                <h3><i aria-hidden="true" class="fas fa-bolt"></i> Quick Actions</h3>
                             </div>
                             <div class="card-body">
                                 <div class="quick-actions">
                                     <button class="action-btn" id="rebootBtn">
-                                        <i class="fas fa-redo"></i>
+                                        <i aria-hidden="true" class="fas fa-redo"></i>
                                         <span>Restart Device</span>
                                     </button>
                                     <button class="action-btn" id="backupBtn">
-                                        <i class="fas fa-download"></i>
+                                        <i aria-hidden="true" class="fas fa-download"></i>
                                         <span>Backup Config</span>
                                     </button>
                                     <button class="action-btn" id="factoryResetBtn">
-                                        <i class="fas fa-eraser"></i>
+                                        <i aria-hidden="true" class="fas fa-eraser"></i>
                                         <span>Factory Reset</span>
                                     </button>
                                     <button class="action-btn" id="refreshInfoBtn">
-                                        <i class="fas fa-sync"></i>
+                                        <i aria-hidden="true" class="fas fa-sync"></i>
                                         <span>Refresh Info</span>
                                     </button>
                                     <button class="action-btn" id="screenshotBtn">
-                                        <i class="fas fa-camera"></i>
+                                        <i aria-hidden="true" class="fas fa-camera"></i>
                                         <span>Screenshot</span>
                                     </button>
                                 </div>
@@ -293,7 +293,7 @@
                         <!-- App Health Card -->
                         <div class="card">
                             <div class="card-header">
-                                <h3><i class="fas fa-heartbeat"></i> App Health</h3>
+                                <h3><i aria-hidden="true" class="fas fa-heartbeat"></i> App Health</h3>
                             </div>
                             <div class="card-body">
                                 <div class="info-grid">
@@ -320,11 +320,11 @@
                                 </div>
                                 <div class="quick-actions" style="margin-top: 0.75rem;">
                                     <button class="action-btn" id="checkErrorsBtn">
-                                        <i class="fas fa-stethoscope"></i>
+                                        <i aria-hidden="true" class="fas fa-stethoscope"></i>
                                         <span>Check Errors</span>
                                     </button>
                                     <button class="action-btn" id="runGCBtn">
-                                        <i class="fas fa-broom"></i>
+                                        <i aria-hidden="true" class="fas fa-broom"></i>
                                         <span>Run GC</span>
                                     </button>
                                 </div>
@@ -334,13 +334,13 @@
                         <!-- Serial Console Card -->
                         <div class="card console-card">
                             <div class="card-header">
-                                <h3><i class="fas fa-terminal"></i> Serial Console</h3>
+                                <h3><i aria-hidden="true" class="fas fa-terminal"></i> Serial Console</h3>
                                 <div class="console-actions">
                                     <button class="console-action-btn" id="replToggleBtn" title="JS REPL mode: send typed input as /eval into the running app">
-                                        <i class="fas fa-code"></i>
+                                        <i aria-hidden="true" class="fas fa-code"></i>
                                     </button>
                                     <button class="console-action-btn" id="clearConsoleBtn" title="Clear console">
-                                        <i class="fas fa-trash-alt"></i>
+                                        <i aria-hidden="true" class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
                             </div>
@@ -369,8 +369,8 @@
 
                     <!-- Search Bar -->
                     <div class="search-bar">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="appSearch" placeholder="Search apps...">
+                        <i aria-hidden="true" class="fas fa-search"></i>
+                        <input type="text" id="appSearch" aria-label="Search apps" placeholder="Search apps...">
                     </div>
 
                     <!-- Apps Grid -->
@@ -387,11 +387,11 @@
                         <!-- Upload Area -->
                         <div class="upload-area">
                             <div class="upload-dropzone" id="dropzone">
-                                <i class="fas fa-cloud-upload-alt"></i>
+                                <i aria-hidden="true" class="fas fa-cloud-upload-alt"></i>
                                 <h3>Drop files here to upload</h3>
                                 <p>or</p>
                                 <button class="btn btn-primary" id="uploadBtn">
-                                    <i class="fas fa-file-upload"></i>
+                                    <i aria-hidden="true" class="fas fa-file-upload"></i>
                                     Browse Files
                                 </button>
                                 <input type="file" id="fileInput" multiple hidden>
@@ -399,7 +399,7 @@
                             <!-- Upload Progress Overlay -->
                             <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display: none;">
                                 <div class="upload-progress-content">
-                                    <i class="fas fa-file-upload fa-2x"></i>
+                                    <i aria-hidden="true" class="fas fa-file-upload fa-2x"></i>
                                     <h3 id="uploadFileName">Uploading file...</h3>
                                     <div class="upload-progress-bar-container">
                                         <div class="upload-progress-bar" id="uploadProgressBar"></div>
@@ -420,10 +420,10 @@
                                 </div>
                                 <div class="file-actions">
                                     <button class="btn-icon" id="newFolderBtn" title="New folder">
-                                        <i class="fas fa-folder-plus"></i>
+                                        <i aria-hidden="true" class="fas fa-folder-plus"></i>
                                     </button>
                                     <button class="btn-icon" id="refreshFilesBtn" title="Refresh">
-                                        <i class="fas fa-sync"></i>
+                                        <i aria-hidden="true" class="fas fa-sync"></i>
                                     </button>
                                 </div>
                             </div>
@@ -438,21 +438,23 @@
                 <section id="config" class="section">
                     <h2 class="section-title">Device Settings</h2>
 
+                    <div id="settingsError" class="settings-error" role="alert" hidden></div>
                     <div class="settings-container">
                         <!-- Dynamic config fields will be loaded here -->
                         <div id="dynamicConfigContainer">
                             <div class="settings-loading">
-                                <i class="fas fa-spinner fa-spin"></i>
+                                <i aria-hidden="true" class="fas fa-spinner fa-spin"></i>
                                 <span>Loading configuration...</span>
                             </div>
                         </div>
 
+                        <span id="settingsStatus" class="settings-status" role="status">Connect a device to load settings</span>
                         <div class="settings-actions">
                             <button class="btn btn-primary" id="saveSystemBtn">
-                                <i class="fas fa-save"></i> Save Settings
+                                <i aria-hidden="true" class="fas fa-save"></i> Save Settings
                             </button>
                             <button class="btn btn-secondary" id="reloadConfigBtn">
-                                <i class="fas fa-sync"></i> Reload
+                                <i aria-hidden="true" class="fas fa-sync"></i> Reload
                             </button>
                         </div>
                     </div>
@@ -468,7 +470,7 @@
             <div class="modal-header">
                 <h3 id="modalAppName">App Name</h3>
                 <button class="modal-close" id="closeModal">
-                    <i class="fas fa-times"></i>
+                    <i aria-hidden="true" class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
@@ -491,7 +493,7 @@
                 <!-- Installation Progress -->
                 <div class="install-progress" id="installProgress" style="display: none;">
                     <div class="progress-status">
-                        <i class="fas fa-spinner fa-spin" id="progressIcon"></i>
+                        <i aria-hidden="true" class="fas fa-spinner fa-spin" id="progressIcon"></i>
                         <span id="progressText">Preparing installation...</span>
                     </div>
                     <div class="progress-bar-container">
@@ -499,19 +501,19 @@
                     </div>
                     <div class="progress-steps">
                         <div class="progress-step" id="step1" data-step="1">
-                            <i class="fas fa-download"></i>
+                            <i aria-hidden="true" class="fas fa-download"></i>
                             <span>Download</span>
                         </div>
                         <div class="progress-step" id="step2" data-step="2">
-                            <i class="fas fa-upload"></i>
+                            <i aria-hidden="true" class="fas fa-upload"></i>
                             <span>Upload</span>
                         </div>
                         <div class="progress-step" id="step3" data-step="3">
-                            <i class="fas fa-cog"></i>
+                            <i aria-hidden="true" class="fas fa-cog"></i>
                             <span>Configure</span>
                         </div>
                         <div class="progress-step" id="step4" data-step="4">
-                            <i class="fas fa-sync"></i>
+                            <i aria-hidden="true" class="fas fa-sync"></i>
                             <span>Restart</span>
                         </div>
                     </div>
@@ -520,14 +522,14 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" id="cancelInstallBtn">Cancel</button>
                 <button class="btn btn-primary" id="installAppBtn">
-                    <i class="fas fa-download"></i> Install
+                    <i aria-hidden="true" class="fas fa-download"></i> Install
                 </button>
             </div>
         </div>
     </div>
 
     <!-- Toast Notifications -->
-    <div class="toast-container" id="toastContainer"></div>
+    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="false"></div>
 
     <!-- Loading Modal (for app installation) -->
     <div class="modal" id="loadingModal">
@@ -546,9 +548,9 @@
     <div class="modal" id="screenshotModal">
         <div class="modal-content" style="max-width: 640px;">
             <div class="modal-header">
-                <h3><i class="fas fa-camera"></i> Device Screenshot</h3>
+                <h3><i aria-hidden="true" class="fas fa-camera"></i> Device Screenshot</h3>
                 <button class="modal-close" id="closeScreenshotModal">
-                    <i class="fas fa-times"></i>
+                    <i aria-hidden="true" class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body" style="text-align: center;">
@@ -556,7 +558,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-primary" id="downloadScreenshotBtn">
-                    <i class="fas fa-download"></i> Download PNG
+                    <i aria-hidden="true" class="fas fa-download"></i> Download PNG
                 </button>
             </div>
         </div>
@@ -571,37 +573,37 @@
                         <ul>
                             <li>
                                 <a href="https://x.com/hwmedialabllc" target="_blank" class="x" title="Follow us on X (Twitter)">
-                                    <i class="fa-brands fa-x-twitter"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-x-twitter"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://www.linkedin.com/company/hwlab" target="_blank" class="linkedin" title="Connect on LinkedIn">
-                                    <i class="fa-brands fa-linkedin"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-linkedin"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://www.youtube.com/@HWMediaLab" target="_blank" class="youtube" title="Subscribe to our YouTube">
-                                    <i class="fa-brands fa-youtube"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-youtube"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://www.tiktok.com/@hwlablcc" target="_blank" class="tiktok" title="Follow us on TikTok">
-                                    <i class="fa-brands fa-tiktok"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-tiktok"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://www.instagram.com/hw.lab.llc" target="_blank" class="instagram" title="Follow us on Instagram">
-                                    <i class="fa-brands fa-instagram"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-instagram"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://github.com/orgs/HW-Lab-Hardware-Design-Agency/repositories?q=webscreen" target="_blank" class="github" title="View source on GitHub">
-                                    <i class="fa-brands fa-github"></i>
+                                    <i aria-hidden="true" class="fa-brands fa-github"></i>
                                 </a>
                             </li>
                             <li>
                                 <a href="https://discord.gg/vKT5b3skjF" target="_blank" class="discord">
-                                <i class="fa-brands fa-discord"></i>
+                                <i aria-hidden="true" class="fa-brands fa-discord"></i>
                                 </a>
                             </li>
                         </ul>
@@ -628,7 +630,9 @@
     </footer>
 
     <!-- Scripts -->
-    <script src="serial.js"></script>
-    <script src="app.js"></script>
+    <script defer src="config.js"></script>
+    <script defer src="serial.js"></script>
+    <script defer src="app.js"></script>
+    <script defer src="settings.js"></script>
 </body>
 </html>
