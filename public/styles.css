@@ -2587,3 +2587,55 @@ body {
         justify-content: center;
     }
 }
+/* Accessible controls and configuration editor additions. */
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--primary-color); outline-offset: 3px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skip-link { position: fixed; top: -100px; left: 16px; z-index: 10000; background: var(--card-bg); padding: 12px; }
+.skip-link:focus { top: 10px; }
+button.nav-item { border: 0; background: transparent; font-family: inherit; text-align: left; }
+button.nav-item.active { background: var(--gradient-primary); }
+button.nav-item:hover:not(.active) { background: var(--bg-color); }
+button.app-card { font-family: inherit; color: inherit; }
+.content, .settings-container, #dynamicConfigContainer { min-width: 0; }
+.settings-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.config-field-control { width: 100%; max-width: 280px; min-width: 0; }
+.inline-check { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: .8rem; color: var(--text-secondary); }
+.settings-status { color: var(--text-secondary); font-size: .875rem; }
+.settings-status.is-dirty { color: var(--primary-color); }
+.settings-error { padding: 1rem; border: 1px solid var(--danger-color); color: var(--danger-color); background: var(--card-bg); border-radius: var(--radius); margin-bottom: 1rem; overflow-wrap: anywhere; }
+.field-hint { font-size: .8rem; color: var(--text-secondary); line-height: 1.6; margin-top: .5rem; }
+.custom-properties-section { padding: 1rem 1.5rem 1.5rem; border-top: 1px solid var(--border-color); }
+.custom-properties-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.custom-properties-heading h4 { font-size: .9rem; font-weight: 500; }
+.custom-properties-heading .btn { white-space: nowrap; }
+.custom-properties-section code { overflow-wrap: anywhere; }
+.custom-property { display: grid; grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr) 32px; gap: 12px; padding: 1rem 0; border-bottom: 1px solid var(--border-color); align-items: start; }
+.custom-property > div { min-width: 0; }
+.custom-property label { display: block; font-size: .8rem; font-weight: 500; margin-bottom: .5rem; }
+.custom-property .form-control { font: inherit; font-size: .875rem; min-width: 0; padding: .5rem .75rem; border-radius: 8px; }
+.custom-property .remove-property { margin-top: 26px; }
+.custom-property textarea { resize: vertical; min-height: 70px; }
+.config-preview { margin-top: 1.5rem; font-size: .875rem; }
+.config-preview summary { cursor: pointer; color: var(--text-secondary); }
+.config-preview pre { padding: 1rem; background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 1rem; font-size: .8rem; overflow: auto; max-height: 300px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.toggle-switch input:focus-visible + .toggle-slider { outline: 3px solid var(--primary-color); outline-offset: 3px; }
+.catalog-empty { padding: 2rem; color: var(--text-secondary); grid-column: 1 / -1; }
+.terminal-fallback-output { height: 210px; overflow: auto; padding: 16px; color: #c9d1d9; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.6 monospace; }
+.terminal-fallback-input { width: 100%; padding: 12px 16px; background: #161b23; border: 0; border-top: 1px solid #303640; color: #c9d1d9; font: 12px monospace; }
+@media (max-width: 768px) {
+    .config-field-control { max-width: 100%; }
+    .custom-properties-section { padding: 1rem; }
+    .custom-property { grid-template-columns: minmax(0, 1fr) 90px 24px; gap: 10px; }
+    .custom-property .property-value-cell { grid-row: 2; grid-column: 1 / 3; }
+    .custom-property .remove-property { grid-column: 3; grid-row: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+.btn:disabled { cursor: not-allowed; opacity: .5; }
+@media (max-width: 768px) {
+    .header-content { flex-wrap: wrap; gap: 1rem; }
+    .connection-status { flex-wrap: wrap; gap: 12px; }
+    .footer-social-links ul { flex-wrap: wrap; }
+}

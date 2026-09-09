@@ -24,6 +24,7 @@ function fixture(serial) {
     admin.serial = serial;
     admin.showToast = (message, type) => toasts.push({ message, type });
     admin.loadDeviceInfo = async () => {};
+    admin.loadCurrentConfig = async () => {};
     return { admin, button, toasts };
 }
 

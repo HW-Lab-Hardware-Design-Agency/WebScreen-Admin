@@ -482,6 +482,9 @@ function buildTimezoneOptionsHtml(selectedValue) {
         }
         html += '</optgroup>';
     }
+    if (selectedValue && !TIMEZONE_DATA.some(([iana, posix]) => posix === selectedValue || iana === selectedValue)) {
+        html += `<option value="${escAttr(String(selectedValue))}" selected>${escAttr(String(selectedValue))} (custom)</option>`;
+    }
     return html;
 }
 
@@ -502,9 +505,13 @@ class WebScreenAdmin {
         this.files = [];
         this.sdCardAvailable = false;
         this.currentConfig = null;
+        this.configDirty = false;
+        this.configLoaded = false;
+        this.configBusy = false;
+        this.rootFiles = [];
 
         // Sections that require SD card
-        this.sdRequiredSections = ['files', 'config'];
+        this.sdRequiredSections = ['files'];
 
         // Terminal
         this.terminal = null;
@@ -528,8 +535,7 @@ class WebScreenAdmin {
     async init() {
         // Check Web Serial API support
         if (!WebScreenSerial.isSupported()) {
-            this.showToast('Web Serial API not supported in this browser. Please use Chrome, Edge, or Opera.', 'error');
-            return;
+            this.showToast('You can browse here. Connect your device using Chrome or Edge on desktop.', 'info');
         }
 
         // Initialize theme
@@ -545,12 +551,17 @@ class WebScreenAdmin {
         this.loadAppsFromConfig();
 
         // Initialize sections
+        this.currentConfig = this.normalizeConfig({});
+        this.renderDynamicConfig(this.currentConfig);
         this.initializeSections();
+        this.updateControlsState(false);
     }
 
     setupTheme() {
         // Load saved theme from localStorage
-        const savedTheme = localStorage.getItem('webscreen-admin-theme') || 'light';
+        let savedTheme = 'light';
+        try { savedTheme = localStorage.getItem('webscreen-admin-theme') || 'light'; } catch {}
+        if (!['light', 'eva'].includes(savedTheme)) savedTheme = 'light';
         this.currentTheme = savedTheme;
 
         // Apply theme
@@ -562,7 +573,7 @@ class WebScreenAdmin {
             themeToggle.addEventListener('click', () => {
                 const newTheme = this.currentTheme === 'light' ? 'eva' : 'light';
                 this.applyTheme(newTheme);
-                localStorage.setItem('webscreen-admin-theme', newTheme);
+                try { localStorage.setItem('webscreen-admin-theme', newTheme); } catch {}
             });
         }
     }
@@ -594,6 +605,35 @@ class WebScreenAdmin {
     }
 
     initTerminal() {
+        // A blocked CDN must not stop settings, navigation, or serial access.
+        if (typeof Terminal === 'undefined' || typeof FitAddon === 'undefined') {
+            const container = document.getElementById('terminal');
+            const output = document.createElement('pre');
+            output.className = 'terminal-fallback-output';
+            output.setAttribute('aria-label', 'Serial output');
+            const input = document.createElement('input');
+            input.className = 'terminal-fallback-input';
+            input.setAttribute('aria-label', 'Serial command');
+            input.placeholder = 'Enter a command, e.g. /help';
+            input.autocomplete = 'off';
+            container.replaceChildren(output, input);
+            this.terminal = {
+                write: text => {
+                    output.textContent = (output.textContent + text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')).slice(-64000);
+                    output.scrollTop = output.scrollHeight;
+                },
+                clear: () => { output.textContent = ''; },
+            };
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Enter' && input.value.trim()) {
+                    this.writeToTerminal(input.value + '\n');
+                    this.sendTerminalCommand(input.value);
+                    input.value = '';
+                }
+            });
+            this.writeToTerminal('Connect your WebScreen to start.\n');
+            return;
+        }
         // Create terminal with custom theme
         this.terminal = new Terminal({
             theme: {
@@ -644,7 +684,8 @@ class WebScreenAdmin {
 
             // Handle window resize
             window.addEventListener('resize', () => {
-                setTimeout(() => this.fitAddon.fit(), 10);
+                clearTimeout(this.terminalResizeTimer);
+                this.terminalResizeTimer = setTimeout(() => this.fitAddon?.fit(), 100);
             });
 
             // Write welcome message
@@ -669,6 +710,7 @@ class WebScreenAdmin {
                 this.terminal.write('\r\n');
                 if (this.currentInput.trim()) {
                     this.commandHistory.push(this.currentInput);
+                    if (this.commandHistory.length > 200) this.commandHistory.shift();
                     this.historyIndex = this.commandHistory.length;
                     this.sendTerminalCommand(this.currentInput);
                 }
@@ -766,6 +808,12 @@ class WebScreenAdmin {
     }
 
     setupEventListeners() {
+        window.addEventListener('beforeunload', event => {
+            if (!this.configDirty) return;
+            event.preventDefault();
+            event.returnValue = '';
+        });
+
         // Connection button
         document.getElementById('connectBtn').addEventListener('click', () => this.toggleConnection());
 
@@ -818,7 +866,8 @@ class WebScreenAdmin {
         });
 
         document.getElementById('appSearch')?.addEventListener('input', (e) => {
-            this.searchApps(e.target.value);
+            clearTimeout(this.searchTimer);
+            this.searchTimer = setTimeout(() => this.searchApps(e.target.value), 120);
         });
 
         // File Manager
@@ -878,6 +927,9 @@ class WebScreenAdmin {
                 // Give device time to initialize after connection
                 this.showToast('Connected! Loading device info...', 'info');
                 await new Promise(resolve => setTimeout(resolve, 1000));
+                // Read configuration even when optional dashboard commands are unsupported.
+                try { await this.loadCurrentConfig(); }
+                catch (error) { this.showToast(error.message, 'error'); }
                 await this.loadDeviceInfo();
             }
         } catch (error) {
@@ -896,7 +948,7 @@ class WebScreenAdmin {
         const statusText = document.getElementById('statusText');
 
         if (connected) {
-            btn.innerHTML = '<i class="fas fa-plug-circle-xmark"></i> Disconnect';
+            btn.innerHTML = '<i aria-hidden="true" class="fas fa-plug-circle-xmark"></i> Disconnect';
             indicator.classList.add('connected');
             statusText.textContent = 'Connected';
             this.showToast('Connected to WebScreen', 'success');
@@ -906,12 +958,18 @@ class WebScreenAdmin {
             this.writeToTerminal('\x1b[90mType /help for available commands\x1b[0m\r\n\r\n');
             this.writePrompt();
         } else {
-            btn.innerHTML = '<i class="fas fa-plug"></i> Connect Device';
+            btn.innerHTML = '<i aria-hidden="true" class="fas fa-plug"></i> Connect Device';
             indicator.classList.remove('connected');
             statusText.textContent = 'Disconnected';
 
             // Reset SD card status when disconnected
             this.sdCardAvailable = false;
+            this.configLoaded = false;
+            this.cancelBrightnessPreview();
+            if (!this.configDirty) {
+                this.currentConfig = this.normalizeConfig({});
+                this.renderDynamicConfig(this.currentConfig);
+            }
             this.updateSDCardDependentSections();
 
             // Show disconnected message in terminal
@@ -928,7 +986,7 @@ class WebScreenAdmin {
     }
 
     handleSerialData(data) {
-        console.log('Serial data:', data);
+        // Configuration reads can contain credentials; keep them out of devtools logs.
         // Display in terminal - handle multiline data properly
         if (this.terminal) {
             // Convert newlines and write to terminal
@@ -956,7 +1014,6 @@ class WebScreenAdmin {
             );
 
             if (matched) {
-                console.log('Script execution detected, hiding loading modal');
                 this.hideLoadingModal();
             }
         }
@@ -974,14 +1031,16 @@ class WebScreenAdmin {
     }
 
     updateControlsState(enabled) {
-        // Update all interactive elements based on connection state
-        const controls = document.querySelectorAll('.action-btn, .form-control, .btn-primary:not(#connectBtn)');
-        controls.forEach(control => {
+        // Browsing, search, and preview settings are useful without hardware.
+        document.querySelectorAll('.action-btn, #uploadBtn, #newFolderBtn, #refreshFilesBtn').forEach(control => {
             control.disabled = !enabled;
         });
+        this.updateSettingsState();
     }
 
     async loadDeviceInfo() {
+        if (this.deviceInfoPending) return;
+        this.deviceInfoPending = true;
         try {
             // Send a blank line first to wake up the device/clear any pending input
             await this.serial.sendCommand('');
@@ -1031,10 +1090,9 @@ class WebScreenAdmin {
                 if (netMAC && info) netMAC.textContent = info.macAddress || '-';
 
                 // Check SD card availability - if we have sdCardSize, it's definitely mounted
-                this.sdCardAvailable = !!(stats.sdCardSize ||
+                this.sdCardAvailable = this.configLoaded || !!(stats.sdCardSize ||
                     (stats.sdCard && !stats.sdCard.toLowerCase().includes('not mounted') &&
                      !stats.sdCard.toLowerCase().includes('not detected')));
-                console.log('SD Card available:', this.sdCardAvailable, 'sdCardSize:', stats.sdCardSize, 'sdCard:', stats.sdCard);
                 this.updateSDCardDependentSections();
             }
 
@@ -1045,64 +1103,41 @@ class WebScreenAdmin {
             if (this.sdCardAvailable) {
                 await this.refreshFiles();
                 // Load current webscreen.json config and populate form fields
-                await this.loadCurrentConfig();
+                if (!this.configLoaded && !this.configDirty) await this.loadCurrentConfig();
                 // Populate auto-start dropdown with installed apps
-                await this.populateAutoStartDropdown();
+                if (!this.configDirty) this.populateAutoStartDropdown();
             }
         } catch (error) {
             console.error('Failed to load device info:', error);
-        }
+            this.showToast(error.message || 'Could not read device information.', 'error');
+        } finally { this.deviceInfoPending = false; }
     }
 
     // Populate auto-start dropdown with JS files from SD card
-    async populateAutoStartDropdown() {
-        const autoStartSelect = document.getElementById('autoStart');
-        if (!autoStartSelect) return;
-
-        // Keep the "None" option
-        const noneOption = autoStartSelect.querySelector('option[value=""]');
-        autoStartSelect.innerHTML = '';
-        if (noneOption) {
-            autoStartSelect.appendChild(noneOption);
-        } else {
-            const none = document.createElement('option');
-            none.value = '';
-            none.textContent = 'None';
-            autoStartSelect.appendChild(none);
-        }
-
-        // Add JS files from the file list
-        for (const file of this.files) {
-            if (file.type === 'file' && file.name.endsWith('.js')) {
-                const option = document.createElement('option');
-                option.value = file.name;
-                option.textContent = file.name;
-                // Select if this is the current script
-                if (this.currentConfig?.script === file.name) {
-                    option.selected = true;
-                }
-                autoStartSelect.appendChild(option);
-            }
-        }
+    populateAutoStartDropdown() {
+        const select = document.getElementById('autoStart');
+        if (!select) return;
+        const saved = this.currentConfig?.script || '';
+        const choices = new Set(this.rootFiles.filter(file => file.type === 'file' && file.name.endsWith('.js')).map(file => file.name));
+        if (saved) choices.add(saved);
+        select.replaceChildren(new Option('None', ''));
+        for (const name of choices) select.add(new Option(name, name));
+        select.value = saved;
     }
 
     updateSDCardDependentSections() {
-        console.log('updateSDCardDependentSections called, sdCardAvailable:', this.sdCardAvailable);
         // Update nav items that require SD card
         this.sdRequiredSections.forEach(section => {
             const navItem = document.querySelector(`.nav-item[data-section="${section}"]`);
-            console.log(`Section ${section}: navItem found:`, !!navItem);
             if (navItem) {
                 if (this.sdCardAvailable) {
                     navItem.classList.remove('disabled');
                     navItem.style.opacity = '1';
                     navItem.style.pointerEvents = 'auto';
-                    console.log(`Enabled section: ${section}`);
                 } else {
                     navItem.classList.add('disabled');
                     navItem.style.opacity = '0.4';
                     navItem.style.pointerEvents = 'auto'; // Keep clickable to show warning
-                    console.log(`Disabled section: ${section}`);
                 }
             }
         });
@@ -1112,6 +1147,8 @@ class WebScreenAdmin {
         // Update navigation
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.toggle('active', item.dataset.section === section);
+            if (item.dataset.section === section) item.setAttribute('aria-current', 'page');
+            else item.removeAttribute('aria-current');
         });
 
         // Update content
@@ -1120,19 +1157,17 @@ class WebScreenAdmin {
         });
 
         this.currentSection = section;
+        if (section === 'dashboard') requestAnimationFrame(() => this.fitAddon?.fit());
 
         // Section-specific initialization
         if (section === 'files' && this.serial.connected && this.sdCardAvailable) {
-            console.log('switchSection: Triggering refreshFiles for files section');
             this.refreshFiles();
         } else if (section === 'files') {
-            console.log('switchSection: Cannot refresh files - connected:', this.serial.connected, 'sdCardAvailable:', this.sdCardAvailable);
         }
 
         // Reload config when switching to settings or network sections
-        if ((section === 'config' || section === 'network') && this.serial.connected && this.sdCardAvailable) {
-            console.log('switchSection: Reloading config for', section);
-            this.loadCurrentConfig();
+        if ((section === 'config' || section === 'network') && this.serial.connected) {
+            if (!this.configLoaded && !this.configDirty) this.loadCurrentConfig().catch(error => this.showToast(error.message, 'error'));
         }
     }
 
@@ -1169,7 +1204,7 @@ class WebScreenAdmin {
                 a.href = url;
                 a.download = `webscreen-backup-${Date.now()}.json`;
                 a.click();
-                URL.revokeObjectURL(url);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
                 this.showToast('Configuration backed up successfully', 'success');
             }
         } catch (error) {
@@ -1260,7 +1295,7 @@ class WebScreenAdmin {
         const original = btn?.innerHTML;
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Capturing...</span>';
+            btn.innerHTML = '<i aria-hidden="true" class="fas fa-spinner fa-spin"></i><span>Capturing...</span>';
         }
 
         try {
@@ -1332,7 +1367,6 @@ class WebScreenAdmin {
             if (!Array.isArray(apps) || apps.length === 0) throw new Error('empty catalog');
             this.availableApps = apps;
             this.renderApps();
-            console.log(`Loaded ${apps.length} apps from apps.json`);
         } catch (error) {
             console.warn('Could not fetch apps.json, using embedded catalog:', error.message);
             this.loadFallbackApps();
@@ -1620,15 +1654,16 @@ class WebScreenAdmin {
 
         // Catalog data may be fetched remotely — escape everything rendered
         grid.innerHTML = apps.map(app => `
-            <div class="app-card" data-app-id="${this.escapeHtml(app.id)}">
+            <button type="button" class="app-card" data-app-id="${this.escapeHtml(app.id)}">
                 <div class="app-card-icon">
-                    <i class="fas ${this.escapeHtml(app.icon)}"></i>
+                    <i aria-hidden="true" class="fas ${this.escapeHtml(app.icon)}"></i>
                 </div>
                 <div class="app-card-name">${this.escapeHtml(app.name)}</div>
                 <div class="app-card-category">${this.escapeHtml(app.category)}</div>
-            </div>
+            </button>
         `).join('');
 
+        if (!apps.length) grid.innerHTML = '<div class="catalog-empty">No apps match your search. Try another name or category.</div>';
         // Add click handlers
         grid.querySelectorAll('.app-card').forEach(card => {
             card.addEventListener('click', () => {
@@ -1640,7 +1675,7 @@ class WebScreenAdmin {
     }
 
     filterApps(category) {
-        this.renderApps(category);
+        this.renderApps(category, document.getElementById('appSearch')?.value || '');
     }
 
     searchApps(query) {
@@ -1659,7 +1694,7 @@ class WebScreenAdmin {
         modalIcon.style.display = 'none'; // Hide img, show icon instead
         modalIcon.insertAdjacentHTML('afterend', `
             <div class="app-card-icon" style="margin: 0 auto 1.5rem;">
-                <i class="fas ${app.icon}"></i>
+                <i aria-hidden="true" class="fas ${app.icon}"></i>
             </div>
         `);
 
@@ -1669,7 +1704,7 @@ class WebScreenAdmin {
         if (app.requires_mqtt && app.install_config) {
             const noteHtml = `
                 <div class="mqtt-config-note" style="background: var(--hover-bg, #f0f4f8); border-radius: 8px; padding: 12px 14px; margin-bottom: 1rem; font-size: 0.85rem; line-height: 1.5;">
-                    <div style="font-weight: 600; margin-bottom: 6px;"><i class="fas fa-cog"></i> MQTT Configuration</div>
+                    <div style="font-weight: 600; margin-bottom: 6px;"><i aria-hidden="true" class="fas fa-cog"></i> MQTT Configuration</div>
                     <div style="color: var(--text-secondary, #666);">
                         After installing, go to <strong>Settings</strong> to update the MQTT broker settings.
                         Default broker: <code style="background: var(--card-bg, #fff); padding: 2px 6px; border-radius: 4px;">${this.escapeHtml(app.install_config.mqtt_broker || 'broker.hivemq.com')}</code>
@@ -1683,15 +1718,15 @@ class WebScreenAdmin {
         const installBtn = document.getElementById('installAppBtn');
         if (!this.serial.connected) {
             installBtn.disabled = true;
-            installBtn.innerHTML = '<i class="fas fa-plug"></i> Connect Device First';
+            installBtn.innerHTML = '<i aria-hidden="true" class="fas fa-plug"></i> Connect Device First';
             installBtn.title = 'Connect to a WebScreen device to install apps';
         } else if (!this.sdCardAvailable) {
             installBtn.disabled = true;
-            installBtn.innerHTML = '<i class="fas fa-sd-card"></i> SD Card Required';
+            installBtn.innerHTML = '<i aria-hidden="true" class="fas fa-sd-card"></i> SD Card Required';
             installBtn.title = 'Insert an SD card to install apps';
         } else {
             installBtn.disabled = false;
-            installBtn.innerHTML = '<i class="fas fa-download"></i> Install to SD Card';
+            installBtn.innerHTML = '<i aria-hidden="true" class="fas fa-download"></i> Install to SD Card';
             installBtn.title = 'Download and install this app to your WebScreen';
         }
 
@@ -1808,10 +1843,8 @@ class WebScreenAdmin {
                 if (appJsonResponse.ok) {
                     const appConfig = await appJsonResponse.json();
                     assets = appConfig.assets || [];
-                    console.log(`Found ${assets.length} assets for ${app.name}:`, assets);
                 }
             } catch (e) {
-                console.log('Could not fetch app.json, proceeding without assets:', e);
             }
 
             updateProgress(1, 10, 'Downloading app from GitHub...');
@@ -1854,7 +1887,6 @@ class WebScreenAdmin {
 
                         updateProgress(2, progressPercent + 5, `Uploading ${assetName}...`);
                         await this.serial.uploadFile('/' + assetName, assetContent);
-                        console.log(`Uploaded asset: ${assetName}`);
 
                     } catch (assetError) {
                         console.warn(`Error processing asset ${assetName}:`, assetError);
@@ -1929,31 +1961,31 @@ class WebScreenAdmin {
     // File Manager functions
     async refreshFiles() {
         if (!this.serial.connected) {
-            console.log('refreshFiles: Not connected');
             return;
         }
 
         if (!this.sdCardAvailable) {
-            console.log('refreshFiles: SD card not available');
             return;
         }
 
         // Show loading state
         const fileList = document.getElementById('fileList');
         if (fileList) {
-            fileList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading files...</div>';
+            fileList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 2rem;"><i aria-hidden="true" class="fas fa-spinner fa-spin"></i> Loading files...</div>';
         }
 
         try {
-            console.log('refreshFiles: Loading files from', this.currentPath);
-            this.files = await this.serial.listFiles(this.currentPath);
-            console.log('refreshFiles: Got files:', this.files);
+            const path = this.currentPath;
+            const files = await this.serial.listFiles(path);
+            if (path !== this.currentPath) return;
+            this.files = files;
+            if (path === '/') this.rootFiles = files;
             this.renderFiles();
         } catch (error) {
             console.error('Failed to load files:', error);
             this.showToast('Failed to load files', 'error');
             if (fileList) {
-                fileList.innerHTML = '<div style="text-align: center; color: var(--danger-color); padding: 2rem;"><i class="fas fa-exclamation-circle"></i> Failed to load files</div>';
+                fileList.innerHTML = '<div style="text-align: center; color: var(--danger-color); padding: 2rem;"><i aria-hidden="true" class="fas fa-exclamation-circle"></i> Failed to load files</div>';
             }
         }
     }
@@ -1961,16 +1993,14 @@ class WebScreenAdmin {
     renderFiles() {
         const fileList = document.getElementById('fileList');
         if (!fileList) {
-            console.log('renderFiles: fileList element not found');
             return;
         }
 
-        console.log('renderFiles: Rendering', this.files.length, 'files');
 
         if (!this.files || this.files.length === 0) {
             fileList.innerHTML = `
                 <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
-                    <i class="fas fa-folder-open" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                    <i aria-hidden="true" class="fas fa-folder-open" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
                     No files found in ${this.escapeHtml(this.currentPath)}
                 </div>`;
             return;
@@ -1979,21 +2009,21 @@ class WebScreenAdmin {
         // File names come from the device's /ls output — escape them
         fileList.innerHTML = this.files.map(file => `
             <div class="file-item" data-name="${this.escapeHtml(file.name)}" data-type="${file.type}">
-                <i class="fas ${file.type === 'dir' ? 'fa-folder' : this.getFileIcon(file.name)}"></i>
+                <i aria-hidden="true" class="fas ${file.type === 'dir' ? 'fa-folder' : this.getFileIcon(file.name)}"></i>
                 <span class="file-item-name">${this.escapeHtml(file.name)}</span>
                 <span class="file-item-size">${this.formatFileSize(file.size)}</span>
                 <div class="file-item-actions">
                     ${file.type === 'file' ? `
                         ${file.name.toLowerCase().endsWith('.js') ? `
                         <button class="btn-icon" data-action="run" title="Run on device (in-place, no reboot)">
-                            <i class="fas fa-play"></i>
+                            <i aria-hidden="true" class="fas fa-play"></i>
                         </button>
                         ` : ''}
                         <button class="btn-icon" data-action="download" title="Download">
-                            <i class="fas fa-download"></i>
+                            <i aria-hidden="true" class="fas fa-download"></i>
                         </button>
                         <button class="btn-icon" data-action="delete" title="Delete">
-                            <i class="fas fa-trash"></i>
+                            <i aria-hidden="true" class="fas fa-trash"></i>
                         </button>
                     ` : ''}
                 </div>
@@ -2078,7 +2108,6 @@ class WebScreenAdmin {
 
                 // Include current path in filename
                 const fullPath = this.currentPath + file.name;
-                console.log('Uploading file to:', fullPath, 'binary:', !isTextFile);
 
                 // Upload with progress callback
                 await this.serial.uploadFile(fullPath, content, (sent, total) => {
@@ -2213,7 +2242,7 @@ class WebScreenAdmin {
         a.href = url;
         a.download = filename;
         a.click();
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     async createNewFolder() {
@@ -2235,843 +2264,6 @@ class WebScreenAdmin {
             this.refreshFiles();
         } catch (error) {
             this.showToast(`Failed to create folder: ${error.message}`, 'error');
-        }
-    }
-
-    // Settings functions
-    async saveSystemSettings() {
-        if (!this.serial.connected) {
-            this.showToast('Please connect to a device first', 'warning');
-            return;
-        }
-
-        if (!this.sdCardAvailable) {
-            this.showToast('SD card required to save settings', 'warning');
-            return;
-        }
-
-        const btn = document.getElementById('saveSystemBtn');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-        btn.disabled = true;
-
-        try {
-            // Collect all values from dynamic config fields
-            const container = document.getElementById('dynamicConfigContainer');
-
-            // Start with normalized current config (migrates old format)
-            const updatedConfig = this.normalizeConfig(this.currentConfig || {});
-
-            // Helper to set nested value in object
-            const setNestedValue = (obj, path, value) => {
-                const keys = path.split('.');
-                let current = obj;
-                for (let i = 0; i < keys.length - 1; i++) {
-                    if (!current[keys[i]]) {
-                        current[keys[i]] = {};
-                    }
-                    current = current[keys[i]];
-                }
-                current[keys[keys.length - 1]] = value;
-            };
-
-            // Collect WiFi settings from the form
-            const wifiSsid = document.getElementById('wifiSSID')?.value?.trim();
-            const wifiPassword = document.getElementById('wifiPassword')?.value;
-
-            if (wifiSsid) {
-                updatedConfig.settings.wifi.ssid = wifiSsid;
-            }
-            if (wifiPassword) {
-                updatedConfig.settings.wifi.pass = wifiPassword;
-            }
-
-            // Collect brightness setting
-            const brightnessSlider = document.getElementById('brightnessSlider');
-            if (brightnessSlider) {
-                if (!updatedConfig.display) updatedConfig.display = {};
-                updatedConfig.display.brightness = parseInt(brightnessSlider.value, 10);
-            }
-
-            // Clean up any legacy/temporary keys that shouldn't be in the config file
-            delete updatedConfig.wifi;              // Root-level wifi object (old bug)
-            delete updatedConfig['wifi.ssid'];      // Flat key from /config set bug
-            delete updatedConfig['wifi.password'];  // Flat key from /config set bug
-            delete updatedConfig.wifiSsid;          // Temp key from loadCurrentConfig
-            delete updatedConfig.wifiPass;          // Temp key from loadCurrentConfig
-            delete updatedConfig.device;            // device.name is not used by firmware
-
-            // Collect values from all config inputs
-            container.querySelectorAll('[data-config-path]').forEach(input => {
-                const path = input.dataset.configPath;
-
-                // Skip color picker inputs (we use the hex input instead)
-                if (input.classList.contains('color-picker-input')) {
-                    return;
-                }
-
-                let value;
-                if (input.type === 'checkbox') {
-                    value = input.checked;
-                } else if (input.type === 'number') {
-                    value = parseFloat(input.value) || 0;
-                } else {
-                    value = input.value;
-                }
-
-                setNestedValue(updatedConfig, path, value);
-            });
-
-            console.log('Saving updated config:', updatedConfig);
-
-            // Save the updated configuration to webscreen.json
-            await this.saveWebScreenConfig(updatedConfig);
-
-            // Update the stored config
-            this.currentConfig = updatedConfig;
-
-            this.showToast('Settings saved! Restart device to apply changes.', 'success');
-
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            this.showToast('Failed to save settings', 'error');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-    }
-
-    // Helper to read and update webscreen.json
-    async readWebScreenConfig() {
-        try {
-            console.log('Reading webscreen.json...');
-            const content = await this.serial.readFile('/webscreen.json');
-            console.log('webscreen.json raw content:', content);
-            if (content) {
-                const config = JSON.parse(content);
-                console.log('webscreen.json parsed:', config);
-                return config;
-            }
-        } catch (e) {
-            console.warn('Could not read/parse webscreen.json:', e);
-        }
-        // Return default config if file doesn't exist or is invalid
-        console.log('Using default config');
-        return {
-            settings: {
-                wifi: { ssid: '', pass: '' },
-                mqtt: { enabled: false }
-            },
-            screen: {
-                background: '#000000',
-                foreground: '#FFFFFF'
-            },
-            script: '',
-            timezone: ''
-        };
-    }
-
-    // Normalize config to standard format (handles backwards compatibility)
-    normalizeConfig(config) {
-        const normalized = JSON.parse(JSON.stringify(config));
-
-        // Ensure settings structure exists
-        if (!normalized.settings) {
-            normalized.settings = {};
-        }
-        if (!normalized.settings.wifi) {
-            normalized.settings.wifi = {};
-        }
-        if (!normalized.settings.mqtt) {
-            normalized.settings.mqtt = { enabled: false };
-        }
-
-        // Migrate old wifi format (root level wifi.ssid/wifi.password) to settings.wifi
-        if (normalized.wifi && typeof normalized.wifi === 'object') {
-            if (normalized.wifi.ssid && !normalized.settings.wifi.ssid) {
-                normalized.settings.wifi.ssid = normalized.wifi.ssid;
-            }
-            if (normalized.wifi.password && !normalized.settings.wifi.pass) {
-                normalized.settings.wifi.pass = normalized.wifi.password;
-            }
-            if (normalized.wifi.pass && !normalized.settings.wifi.pass) {
-                normalized.settings.wifi.pass = normalized.wifi.pass;
-            }
-            // Remove duplicate root-level wifi key
-            delete normalized.wifi;
-        }
-
-        // Migrate old format: root level wifi.ssid string (from /config set)
-        if (normalized['wifi.ssid']) {
-            if (!normalized.settings.wifi.ssid) {
-                normalized.settings.wifi.ssid = normalized['wifi.ssid'];
-            }
-            delete normalized['wifi.ssid'];
-        }
-        if (normalized['wifi.password']) {
-            if (!normalized.settings.wifi.pass) {
-                normalized.settings.wifi.pass = normalized['wifi.password'];
-            }
-            delete normalized['wifi.password'];
-        }
-
-        // Clean up temporary keys from loadCurrentConfig
-        delete normalized.wifiSsid;
-        delete normalized.wifiPass;
-        delete normalized.device;
-
-        // Ensure screen structure
-        if (!normalized.screen) {
-            normalized.screen = {
-                background: '#000000',
-                foreground: '#FFFFFF'
-            };
-        }
-
-        // Ensure display structure for brightness
-        if (!normalized.display) {
-            normalized.display = {};
-        }
-        if (normalized.display.brightness === undefined) {
-            normalized.display.brightness = 200;
-        }
-
-        return normalized;
-    }
-
-    async saveWebScreenConfig(config) {
-        const configJson = JSON.stringify(config, null, 2);
-        await this.serial.uploadFile('/webscreen.json', configJson);
-    }
-
-    // Load current config and populate form fields
-    async loadCurrentConfig() {
-        if (!this.serial.connected || !this.sdCardAvailable) {
-            console.log('loadCurrentConfig: Not connected or no SD card');
-            return;
-        }
-
-        console.log('loadCurrentConfig: Starting to load config...');
-
-        try {
-            // Try to get config values using /config get commands (more reliable)
-            const configValues = {};
-
-            // Get WiFi SSID (try both old and new paths)
-            let wifiSsid = await this.serial.getConfig('settings.wifi.ssid');
-            if (!wifiSsid) wifiSsid = await this.serial.getConfig('wifi.ssid');
-            if (wifiSsid) configValues.wifiSsid = wifiSsid;
-
-            // Get WiFi password (might not be returned for security)
-            let wifiPass = await this.serial.getConfig('settings.wifi.pass');
-            if (!wifiPass) wifiPass = await this.serial.getConfig('wifi.password');
-            if (wifiPass) configValues.wifiPass = wifiPass;
-
-            // Get script
-            const script = await this.serial.getConfig('script');
-            if (script) configValues.script = script;
-
-            console.log('loadCurrentConfig: Got config values:', configValues);
-
-            // Also try reading webscreen.json as fallback
-            let fileConfig = await this.readWebScreenConfig();
-            // Normalize config for backwards compatibility
-            fileConfig = this.normalizeConfig(fileConfig);
-            console.log('loadCurrentConfig: Normalized file config:', fileConfig);
-
-            // Merge configs (command values take priority)
-            const wifiConfig = fileConfig.settings?.wifi || {};
-            const finalSsid = configValues.wifiSsid || wifiConfig.ssid || '';
-            const finalPass = configValues.wifiPass || wifiConfig.pass || '';
-            const finalScript = configValues.script || fileConfig.script || '';
-
-            console.log('loadCurrentConfig: Final values - SSID:', finalSsid, 'Script:', finalScript);
-
-            // Store current config for later use (normalized, without temp keys)
-            this.currentConfig = fileConfig;
-
-            // Render the dynamic config UI (creates WiFi, brightness, etc. DOM elements)
-            this.renderDynamicConfig(fileConfig);
-
-            // Populate WiFi fields (after render, since they're created dynamically)
-            const ssidField = document.getElementById('wifiSSID');
-            const passwordField = document.getElementById('wifiPassword');
-
-            if (ssidField) {
-                ssidField.value = finalSsid;
-            }
-            if (passwordField) {
-                passwordField.value = '';
-                if (finalPass) {
-                    passwordField.placeholder = '••••••••• (password set)';
-                } else {
-                    passwordField.placeholder = 'Enter WiFi password';
-                }
-            }
-
-            // Populate brightness slider and attach event listeners
-            const brightnessSlider = document.getElementById('brightnessSlider');
-            const brightnessValue = document.getElementById('brightnessValue');
-            const configBrightness = fileConfig.display?.brightness;
-            if (brightnessSlider) {
-                if (configBrightness !== undefined) {
-                    brightnessSlider.value = configBrightness;
-                    if (brightnessValue) brightnessValue.textContent = configBrightness;
-                }
-                brightnessSlider.addEventListener('input', (e) => {
-                    const bv = document.getElementById('brightnessValue');
-                    if (bv) bv.textContent = e.target.value;
-                });
-                brightnessSlider.addEventListener('change', (e) => {
-                    if (this.serial.connected) {
-                        this.serial.setBrightness(parseInt(e.target.value, 10));
-                    }
-                });
-            }
-
-            // Populate auto-start dropdown from the current file list. Reads
-            // this.currentConfig.script to mark the saved choice as selected.
-            await this.populateAutoStartDropdown();
-
-            // If the device reports a script that isn't a file on the SD card
-            // (e.g. file deleted but config still points to it), surface it as
-            // a selected option anyway so the user can see and clear it.
-            if (finalScript) {
-                const autoStartSelect = document.getElementById('autoStart');
-                if (autoStartSelect && ![...autoStartSelect.options].some(o => o.value === finalScript)) {
-                    const option = document.createElement('option');
-                    option.value = finalScript;
-                    option.textContent = finalScript + ' (missing on SD)';
-                    option.selected = true;
-                    autoStartSelect.appendChild(option);
-                }
-            }
-
-        } catch (error) {
-            console.error('Failed to load current config:', error);
-        }
-    }
-
-    // Reload configuration from device
-    async reloadConfig() {
-        if (!this.serial.connected || !this.sdCardAvailable) {
-            this.showToast('Device not connected or SD card not available', 'warning');
-            return;
-        }
-
-        const btn = document.getElementById('reloadConfigBtn');
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
-        btn.disabled = true;
-
-        try {
-            await this.loadCurrentConfig();
-            this.showToast('Configuration reloaded', 'success');
-        } catch (error) {
-            console.error('Failed to reload config:', error);
-            this.showToast('Failed to reload configuration', 'error');
-        } finally {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-        }
-    }
-
-    // Render dynamic configuration fields from JSON config
-    renderDynamicConfig(config) {
-        const container = document.getElementById('dynamicConfigContainer');
-        if (!container) return;
-
-        // Clear loading state
-        container.innerHTML = '';
-
-        // Helper to determine if a value looks like a color
-        const isColorValue = (value) => {
-            if (typeof value !== 'string') return false;
-            return /^#[0-9A-Fa-f]{6}$/.test(value) || /^#[0-9A-Fa-f]{3}$/.test(value);
-        };
-
-        // Better labels for known config keys
-        const getLabelForKey = (key, path) => {
-            const fullPath = path ? `${path}.${key}` : key;
-            const labelMap = {
-                'settings.mqtt.enabled': 'MQTT',
-                'mqtt.enabled': 'MQTT',
-                'screen.background': 'Background Color',
-                'screen.foreground': 'Text Color'
-            };
-            if (labelMap[fullPath]) {
-                return labelMap[fullPath];
-            }
-            // Default: capitalize and add spaces before uppercase letters
-            return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
-        };
-
-        // Keys to completely skip rendering (handled by static UI)
-        const skipPaths = [
-            'settings.wifi', 'settings.wifi.ssid', 'settings.wifi.pass',
-            'wifi', 'wifi.ssid', 'wifi.password', 'wifi.pass',
-            'wifiSsid', 'wifiPass',
-            'display.brightness'
-        ];
-
-        // Helper to create a form field based on value type
-        const createField = (key, value, path = '') => {
-            const fullPath = path ? `${path}.${key}` : key;
-
-            // Skip paths that are handled by static UI
-            if (skipPaths.includes(fullPath) || skipPaths.includes(key)) {
-                return '';
-            }
-
-            const fieldId = `config-${fullPath.replace(/\./g, '-')}`;
-            const labelText = getLabelForKey(key, path);
-            const esc = (v) => this.escapeHtml(v); // config values come from the device — escape them
-
-            let fieldHtml = '';
-
-            if (typeof value === 'boolean') {
-                // Toggle switch for booleans
-                fieldHtml = `
-                    <div class="config-field">
-                        <label for="${fieldId}">${labelText}</label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="${fieldId}" data-config-path="${fullPath}" ${value ? 'checked' : ''}>
-                            <span class="toggle-slider"></span>
-                        </label>
-                    </div>
-                `;
-            } else if (typeof value === 'number') {
-                // Number input
-                fieldHtml = `
-                    <div class="config-field">
-                        <label for="${fieldId}">${labelText}</label>
-                        <input type="number" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${value}">
-                    </div>
-                `;
-            } else if (typeof value === 'string') {
-                if (isColorValue(value)) {
-                    // Color picker for color values
-                    fieldHtml = `
-                        <div class="config-field">
-                            <label for="${fieldId}">${labelText}</label>
-                            <div class="color-picker-wrapper">
-                                <input type="color" id="${fieldId}-picker" class="color-picker-input" data-config-path="${fullPath}" value="${esc(value)}">
-                                <input type="text" id="${fieldId}" class="form-control color-hex-input" data-config-path="${fullPath}" value="${esc(value)}" placeholder="#FFFFFF">
-                            </div>
-                        </div>
-                    `;
-                } else if (key.toLowerCase().includes('pass') || key.toLowerCase().includes('password')) {
-                    // Password field
-                    fieldHtml = `
-                        <div class="config-field">
-                            <label for="${fieldId}">${labelText}</label>
-                            <div class="password-input">
-                                <input type="password" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${esc(value)}" placeholder="Enter ${esc(labelText.toLowerCase())}">
-                                <button type="button" class="btn-icon toggle-password-btn">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    // Regular text input
-                    fieldHtml = `
-                        <div class="config-field">
-                            <label for="${fieldId}">${labelText}</label>
-                            <input type="text" id="${fieldId}" class="form-control" data-config-path="${fullPath}" value="${esc(value)}">
-                        </div>
-                    `;
-                }
-            }
-
-            return fieldHtml;
-        };
-
-        // Get appropriate icon for section type
-        const getSectionIcon = (title) => {
-            const icons = {
-                'settings': 'fa-sliders-h',
-                'screen': 'fa-desktop',
-                'wifi': 'fa-wifi',
-                'mqtt': 'fa-broadcast-tower',
-                'device': 'fa-microchip',
-                'general': 'fa-cog',
-                'network': 'fa-network-wired',
-                'display': 'fa-tv',
-                'theme': 'fa-palette',
-                'colors': 'fa-paint-brush'
-            };
-            return icons[title.toLowerCase()] || 'fa-cog';
-        };
-
-        // Helper to create a section from an object
-        const createSection = (title, obj, path = '') => {
-            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-                return '';
-            }
-
-            let fieldsHtml = '';
-            for (const [key, value] of Object.entries(obj)) {
-                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    // Nested object - create subsection
-                    fieldsHtml += createSection(key.charAt(0).toUpperCase() + key.slice(1), value, path ? `${path}.${key}` : key);
-                } else if (!Array.isArray(value)) {
-                    // Simple value - create field
-                    fieldsHtml += createField(key, value, path);
-                }
-            }
-
-            if (!fieldsHtml) return '';
-
-            const icon = getSectionIcon(title);
-            return `
-                <div class="config-section">
-                    <h3 class="config-section-title"><i class="fas ${icon}"></i> ${title}</h3>
-                    <div class="config-section-fields">
-                        ${fieldsHtml}
-                    </div>
-                </div>
-            `;
-        };
-
-        // Helper to create fields from an object (without section wrapper)
-        const createFieldsFromObject = (obj, path = '') => {
-            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
-                return '';
-            }
-
-            let fieldsHtml = '';
-            for (const [key, value] of Object.entries(obj)) {
-                const fullPath = path ? `${path}.${key}` : key;
-
-                // Skip paths that are handled by static UI
-                if (skipPaths.includes(fullPath) || skipPaths.includes(key)) {
-                    continue;
-                }
-
-                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                    // Nested object - recurse
-                    fieldsHtml += createFieldsFromObject(value, fullPath);
-                } else if (!Array.isArray(value)) {
-                    // Simple value - create field
-                    fieldsHtml += createField(key, value, path);
-                }
-            }
-            return fieldsHtml;
-        };
-
-        // Build the dynamic config UI with organized sections
-        let html = '';
-
-        // 1. GENERAL SECTION - WiFi + top-level simple properties
-        // 'script' is rendered as a dedicated dropdown below; skip generic rendering
-        const excludeKeys = ['settings', 'screen', 'wifi', 'mqtt', 'device', 'timezone', 'display', 'script'];
-        let generalFields = '';
-
-        // WiFi fields
-        const wifiSsid = config.settings?.wifi?.ssid || '';
-        generalFields += `
-            <div class="config-field">
-                <label for="wifiSSID">WiFi Network (SSID)</label>
-                <input type="text" id="wifiSSID" class="form-control" data-config-path="settings.wifi.ssid" value="${this.escapeHtml(wifiSsid)}" placeholder="Enter WiFi network name">
-            </div>
-            <div class="config-field">
-                <label for="wifiPassword">WiFi Password</label>
-                <input type="password" id="wifiPassword" class="form-control" placeholder="Enter WiFi password">
-            </div>
-            <div class="config-field">
-                <label for="autoStart">Auto-start Script</label>
-                <select id="autoStart" class="form-control" data-config-path="script">
-                    <option value="">None</option>
-                </select>
-            </div>
-            <div class="network-status" style="margin: 0.5rem 0; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-color);">
-                <div class="status-item">
-                    <span class="status-label">Status:</span>
-                    <span class="status-value" id="netStatus">Not Connected</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">IP Address:</span>
-                    <span class="status-value" id="netIP">-</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Signal:</span>
-                    <span class="status-value" id="netSignal">-</span>
-                </div>
-            </div>
-        `;
-
-        // Top-level simple properties
-        const topLevelFields = {};
-        for (const [key, value] of Object.entries(config)) {
-            if (!excludeKeys.includes(key) && typeof value !== 'object') {
-                topLevelFields[key] = value;
-            }
-        }
-        for (const [key, value] of Object.entries(topLevelFields)) {
-            generalFields += createField(key, value, '');
-        }
-
-        html += `
-            <div class="config-section">
-                <h3 class="config-section-title"><i class="fas fa-cog"></i> General</h3>
-                <div class="config-section-fields">
-                    ${generalFields}
-                </div>
-            </div>
-        `;
-
-        // 2. DEVICE SECTION - includes screen settings + brightness
-        let deviceFields = '';
-        if (config.device) {
-            deviceFields += createFieldsFromObject(config.device, 'device');
-        }
-        if (config.screen) {
-            deviceFields += createFieldsFromObject(config.screen, 'screen');
-        }
-        // Brightness slider
-        deviceFields += `
-            <div class="config-field">
-                <label for="brightnessSlider">Brightness (<span id="brightnessValue">200</span>/255)</label>
-                <input type="range" id="brightnessSlider" class="form-control" min="0" max="255" value="${config.display?.brightness ?? 200}" style="width: 100%;">
-            </div>
-        `;
-        html += `
-            <div class="config-section">
-                <h3 class="config-section-title"><i class="fas fa-microchip"></i> Device</h3>
-                <div class="config-section-fields">
-                    ${deviceFields}
-                </div>
-            </div>
-        `;
-
-        // 3. TIME & LOCATION SECTION - editable time/date with sync button
-        const currentTimezone = config.timezone || config.device?.timezone || '';
-        html += `
-            <div class="config-section">
-                <h3 class="config-section-title"><i class="fas fa-clock"></i> Time & Location</h3>
-                <div class="config-section-fields">
-                    <div class="config-field">
-                        <label for="config-time">Time</label>
-                        <div class="input-with-button">
-                            <input type="time" id="config-time" class="form-control" step="1">
-                            <button type="button" class="btn btn-secondary btn-detect" id="detectTimeBtn">
-                                <i class="fas fa-crosshairs"></i> Detect
-                            </button>
-                        </div>
-                    </div>
-                    <div class="config-field">
-                        <label for="config-date">Date</label>
-                        <input type="date" id="config-date" class="form-control">
-                    </div>
-                    <div class="config-field">
-                        <label for="config-timezone">Timezone</label>
-                        <div class="input-with-button">
-                            <select id="config-timezone" class="form-control" data-config-path="timezone">
-                                ${buildTimezoneOptionsHtml(currentTimezone)}
-                            </select>
-                            <button type="button" class="btn btn-secondary btn-detect" id="detectTimezoneBtn">
-                                <i class="fas fa-crosshairs"></i> Detect
-                            </button>
-                        </div>
-                    </div>
-                    <div class="config-field config-field-actions">
-                        <label></label>
-                        <button type="button" class="btn btn-primary" id="syncTimeBtn">
-                            <i class="fas fa-sync"></i> Sync Time to Device
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        // 4. SETTINGS SECTION - MQTT and other settings (WiFi is managed in Network tab)
-        let settingsFields = '';
-
-        // Get MQTT config (either from settings.mqtt or top-level mqtt, not both)
-        const mqttConfig = config.settings?.mqtt || config.mqtt;
-        if (mqttConfig) {
-            const mqttPath = config.settings?.mqtt ? 'settings.mqtt' : 'mqtt';
-            settingsFields += createFieldsFromObject(mqttConfig, mqttPath);
-        }
-
-        // Add other settings fields (excluding wifi and mqtt which we handled separately)
-        if (config.settings) {
-            for (const [key, value] of Object.entries(config.settings)) {
-                // Skip wifi (managed in Network tab) and mqtt (handled above)
-                if (key !== 'wifi' && key !== 'mqtt') {
-                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-                        settingsFields += createFieldsFromObject(value, `settings.${key}`);
-                    } else if (!Array.isArray(value)) {
-                        settingsFields += createField(key, value, 'settings');
-                    }
-                }
-            }
-        }
-
-        if (settingsFields) {
-            html += `
-                <div class="config-section">
-                    <h3 class="config-section-title"><i class="fas fa-cog"></i> Advanced Settings</h3>
-                    <div class="config-section-fields">
-                        ${settingsFields}
-                    </div>
-                </div>
-            `;
-        }
-
-        if (!html) {
-            html = `
-                <div class="config-empty">
-                    <i class="fas fa-info-circle"></i>
-                    <p>No configuration options available.</p>
-                </div>
-            `;
-        }
-
-        container.innerHTML = html;
-
-        // Setup event listeners for color pickers
-        container.querySelectorAll('.color-picker-wrapper').forEach(wrapper => {
-            const picker = wrapper.querySelector('.color-picker-input');
-            const hexInput = wrapper.querySelector('.color-hex-input');
-
-            if (picker && hexInput) {
-                // Sync picker to hex input
-                picker.addEventListener('input', () => {
-                    hexInput.value = picker.value.toUpperCase();
-                });
-
-                // Sync hex input to picker
-                hexInput.addEventListener('input', () => {
-                    const val = hexInput.value;
-                    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
-                        picker.value = val;
-                    }
-                });
-            }
-        });
-
-        // Setup password toggle buttons
-        container.querySelectorAll('.toggle-password-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const input = btn.parentElement.querySelector('input');
-                const icon = btn.querySelector('i');
-                if (input.type === 'password') {
-                    input.type = 'text';
-                    icon.classList.replace('fa-eye', 'fa-eye-slash');
-                } else {
-                    input.type = 'password';
-                    icon.classList.replace('fa-eye-slash', 'fa-eye');
-                }
-            });
-        });
-
-        // Setup time/date fields
-        const timeInput = document.getElementById('config-time');
-        const dateInput = document.getElementById('config-date');
-        const detectTimeBtn = document.getElementById('detectTimeBtn');
-        const detectTimezoneBtn = document.getElementById('detectTimezoneBtn');
-        const timezoneInput = document.getElementById('config-timezone');
-        const syncTimeBtn = document.getElementById('syncTimeBtn');
-
-        // Helper to set current browser time/date
-        const setCurrentTime = () => {
-            const now = new Date();
-            if (timeInput) {
-                const hours = String(now.getHours()).padStart(2, '0');
-                const minutes = String(now.getMinutes()).padStart(2, '0');
-                const seconds = String(now.getSeconds()).padStart(2, '0');
-                timeInput.value = `${hours}:${minutes}:${seconds}`;
-            }
-            if (dateInput) {
-                const year = now.getFullYear();
-                const month = String(now.getMonth() + 1).padStart(2, '0');
-                const day = String(now.getDate()).padStart(2, '0');
-                dateInput.value = `${year}-${month}-${day}`;
-            }
-        };
-
-        // Set initial values to current time
-        setCurrentTime();
-
-        // Detect time button
-        if (detectTimeBtn) {
-            detectTimeBtn.addEventListener('click', () => {
-                setCurrentTime();
-                this.showToast('Time updated to current local time', 'success');
-            });
-        }
-
-        // Setup timezone detect button
-        if (detectTimezoneBtn && timezoneInput) {
-            // Auto-detect if no timezone selected
-            const autoSelectTimezone = (ianaName) => {
-                const option = timezoneInput.querySelector(`[data-iana="${ianaName}"]`);
-                if (option) {
-                    timezoneInput.value = option.value;
-                    return true;
-                }
-                return false;
-            };
-
-            if (!timezoneInput.value) {
-                autoSelectTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
-            }
-
-            detectTimezoneBtn.addEventListener('click', () => {
-                const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                if (autoSelectTimezone(detectedTimezone)) {
-                    this.showToast(`Detected timezone: ${detectedTimezone}`, 'success');
-                } else {
-                    this.showToast(`Timezone "${detectedTimezone}" not found in list`, 'warning');
-                }
-            });
-        }
-
-        // Sync time to device button
-        if (syncTimeBtn) {
-            syncTimeBtn.addEventListener('click', async () => {
-                if (!this.serial.connected) {
-                    this.showToast('Please connect to a device first', 'warning');
-                    return;
-                }
-
-                const timeVal = timeInput?.value;
-                const dateVal = dateInput?.value;
-                const timezone = timezoneInput?.value || 'UTC0';
-
-                if (!timeVal || !dateVal) {
-                    this.showToast('Please set both time and date', 'warning');
-                    return;
-                }
-
-                // Parse the time and date
-                const [hours, minutes, seconds] = timeVal.split(':').map(Number);
-                const [year, month, day] = dateVal.split('-').map(Number);
-
-                // Create a Date object and get epoch
-                const dateObj = new Date(year, month - 1, day, hours, minutes, seconds || 0);
-                const epoch = Math.floor(dateObj.getTime() / 1000);
-
-                syncTimeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
-                syncTimeBtn.disabled = true;
-
-                try {
-                    const success = await this.serial.syncTime(epoch, timezone);
-                    if (success) {
-                        this.showToast('Time synced to device!', 'success');
-                    } else {
-                        this.showToast('Failed to sync time', 'error');
-                    }
-                } catch (error) {
-                    console.error('Time sync error:', error);
-                    this.showToast('Failed to sync time', 'error');
-                } finally {
-                    syncTimeBtn.innerHTML = '<i class="fas fa-sync"></i> Sync Time to Device';
-                    syncTimeBtn.disabled = false;
-                }
-            });
         }
     }
 
@@ -3125,7 +2317,7 @@ class WebScreenAdmin {
         };
 
         toast.innerHTML = `
-            <i class="fas ${icons[type]}"></i>
+            <i aria-hidden="true" class="fas ${icons[type]}"></i>
             <span class="toast-message">${this.escapeHtml(message)}</span>
         `;
 
@@ -3156,7 +2348,6 @@ class WebScreenAdmin {
 
         // Set a timeout to auto-hide after 30 seconds (fallback)
         this.scriptExecutionTimeout = setTimeout(() => {
-            console.log('Script execution timeout, hiding loading modal');
             this.hideLoadingModal();
         }, 30000);
     }
@@ -3176,8 +2367,8 @@ class WebScreenAdmin {
     }
 
     initializeSections() {
-        // Initialize with dashboard
-        this.switchSection('dashboard');
+        const section = location.hash.slice(1);
+        this.switchSection(['dashboard', 'apps', 'config'].includes(section) ? section : 'dashboard');
     }
 }
 
