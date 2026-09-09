@@ -1245,6 +1245,23 @@ class WebScreenSerial {
         });
     }
 
+    // Explain port failures without hiding the browser's underlying error.
+    static connectionErrorMessage(error) {
+        switch (error.name) {
+            case 'NotFoundError':
+                return 'No serial port selected. Click Connect Device and select your WebScreen.';
+            case 'NetworkError':
+                return 'Could not open the serial port. Close Arduino Serial Monitor/Plotter and any other serial tabs, then reconnect. If it still fails, check the USB cable and serial-port permissions.';
+            case 'InvalidStateError':
+                return 'The serial port is already open. Disconnect it or reload this page, then try again.';
+            case 'SecurityError':
+            case 'NotAllowedError':
+                return 'Serial access was denied. Allow serial access for this site in your browser settings, then reconnect.';
+            default:
+                return `Could not connect: ${error.message || 'Check the USB connection and try again.'}`;
+        }
+    }
+
     // Check if Web Serial API is supported
     static isSupported() {
         return 'serial' in navigator;

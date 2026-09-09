@@ -139,8 +139,13 @@ A modern, user-friendly web application for configuring and managing WebScreen d
 ### Can't Connect to Device
 1. Make sure WebScreen is connected via USB
 2. Check that you're using Chrome, Edge, or Opera
-3. Try a different USB cable or port
-4. Restart your WebScreen device
+3. Close Arduino IDE's **Serial Monitor and Serial Plotter**, other serial terminals,
+   and any other browser tabs using the device. Only one program can hold the port.
+4. Click **Connect Device** and select the WebScreen port again. On Linux it is
+   commonly `/dev/ttyACM0`; `fuser -v /dev/ttyACM0` identifies programs using it.
+5. If the port still cannot open, check the browser's serial permission for the site
+   and your operating system's device permissions. Try a different USB data cable
+   or port, then restart your WebScreen device.
 
 ### Apps Won't Install
 1. Ensure device is connected

@@ -866,18 +866,27 @@ class WebScreenAdmin {
     }
 
     async toggleConnection() {
-        if (this.serial.connected) {
-            await this.serial.disconnect();
-        } else {
-            try {
+        if (this.connectionPending) return;
+        this.connectionPending = true;
+        const button = document.getElementById('connectBtn');
+        if (button) button.disabled = true;
+        try {
+            if (this.serial.connected) {
+                await this.serial.disconnect();
+            } else {
                 await this.serial.connect();
                 // Give device time to initialize after connection
                 this.showToast('Connected! Loading device info...', 'info');
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 await this.loadDeviceInfo();
-            } catch (error) {
-                this.showToast('Failed to connect to device', 'error');
             }
+        } catch (error) {
+            console.error('Serial connection failed:', error);
+            this.showToast(WebScreenSerial.connectionErrorMessage(error),
+                error.name === 'NotFoundError' ? 'info' : 'error');
+        } finally {
+            this.connectionPending = false;
+            if (button) button.disabled = false;
         }
     }
 
@@ -3117,7 +3126,7 @@ class WebScreenAdmin {
 
         toast.innerHTML = `
             <i class="fas ${icons[type]}"></i>
-            <span class="toast-message">${message}</span>
+            <span class="toast-message">${this.escapeHtml(message)}</span>
         `;
 
         container.appendChild(toast);
