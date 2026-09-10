@@ -1257,6 +1257,24 @@ body {
     color: var(--text-secondary);
 }
 
+.app-requirement {
+    display: inline-block;
+    margin: 0.75rem 0 0;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.app-requirement[hidden] { display: none; }
+
+#modalAppRequirement { margin: 0 0 1rem; }
+
 /* File Manager */
 .file-manager {
     display: grid;

@@ -14,6 +14,12 @@ Open <http://127.0.0.1:8765>. Chrome and Edge on desktop support USB connections
 
 Connect your WebScreen by USB, close Arduino Serial Monitor/Plotter and other programs using its port, then select **Connect Device**. Settings and file operations require an SD card. Configuration uploads require firmware with `/upload` support (2.0 or newer).
 
+## LVGL demo apps
+
+Search **Apps** for `LVGL` or `firmware 4.0` to find Arc Text, Chart Gallery, Gauge Dashboard, Typography, and Motion Lines. Each card and its details show **Requires firmware 4.0 (LVGL 9.5 compatible)**. Upgrade to the compatible firmware before running these demos. They run offline with no additional assets; a short button press changes modes or pauses animation.
+
+The catalog lives in `public/apps.json`, with an embedded fallback in `public/app.js`. Keep both copies in sync. Optional `min_firmware` and `lvgl_version` fields add the compatibility label; apps without these fields keep their existing display.
+
 ## Custom configuration
 
 Open **Settings → Advanced → Add property**. Enter a property name, choose a type, and enter its value:
@@ -58,6 +64,8 @@ For browser checks, install Playwright outside the repository, start the local s
 npm install --prefix /tmp/webscreen-admin-browser playwright
 PLAYWRIGHT_PATH=/tmp/webscreen-admin-browser/node_modules/playwright node tests/browser.test.mjs
 ```
+
+To check catalog labels and demo installs using a simulated device, run `node tests/catalog.browser.test.mjs` with the same `PLAYWRIGHT_PATH`. This also needs the sibling WebScreen-Awesome checkout; set `AWESOME_ROOT` if it is elsewhere.
 
 Set `ADMIN_URL` to use another local server URL. Browser tests simulate the serial device and cover configuration round trips, validation, failure recovery, navigation, responsive layouts, and unavailable CDNs. They do not connect to physical USB hardware. Test affected workflows on a board before a release.
 
