@@ -840,6 +840,7 @@ class WebScreenAdmin {
 
         // App Health
         document.getElementById('checkErrorsBtn')?.addEventListener('click', () => this.checkErrors());
+        document.getElementById('pressButtonBtn')?.addEventListener('click', () => this.pressAppButton());
         document.getElementById('runGCBtn')?.addEventListener('click', () => this.runGarbageCollection());
 
         // Screenshot
@@ -1337,6 +1338,21 @@ class WebScreenAdmin {
         a.click();
     }
 
+    // App Health: send a button press to the running app (firmware /button)
+    async pressAppButton() {
+        if (!this.serial.connected) {
+            this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        try {
+            await this.serial.pressButton();
+            this.showToast('Button press sent to the app', 'success');
+        } catch (error) {
+            this.showToast(error.message || 'Failed to send the button press', 'error');
+        }
+    }
+
     // App Health: request a JS garbage collection (firmware /gc)
     async runGarbageCollection() {
         if (!this.serial.connected) {
@@ -1630,7 +1646,7 @@ class WebScreenAdmin {
                     "name": "LVGL Arc Text",
                     "id": "lvgl95_arc_text",
                     "category": "utilities",
-                    "description": "Two animated circular labels with different radii, fonts, and text directions. Short press: clockwise \u2192 counterclockwise \u2192 paused.",
+                    "description": "Two animated circular labels with different radii, fonts, and text directions. Press Button: clockwise \u2192 counterclockwise \u2192 paused.",
                     "icon": "fa-circle-notch",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/lvgl95_arc_text",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/lvgl95_arc_text/script.js",
@@ -1643,7 +1659,7 @@ class WebScreenAdmin {
                     "name": "LVGL Chart Gallery",
                     "id": "lvgl95_charts",
                     "category": "utilities",
-                    "description": "Curve, line, bar, and scatter charts with two live synthetic signals. Short press: curve \u2192 line \u2192 bar \u2192 scatter \u2192 paused.",
+                    "description": "Curve, line, bar, and scatter charts with two live synthetic signals. Press Button: curve \u2192 line \u2192 bar \u2192 scatter \u2192 paused.",
                     "icon": "fa-chart-line",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/lvgl95_charts",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/lvgl95_charts/script.js",
@@ -1656,7 +1672,7 @@ class WebScreenAdmin {
                     "name": "LVGL Gauge Dashboard",
                     "id": "lvgl95_gauges",
                     "category": "utilities",
-                    "description": "Three independent gauges with animated needles and colored progress arcs. Uses synthetic data. Short press: pause / resume.",
+                    "description": "Three independent gauges with animated needles and colored progress arcs. Uses synthetic data. Press Button: pause / resume.",
                     "icon": "fa-gauge-high",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/lvgl95_gauges",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/lvgl95_gauges/script.js",
@@ -1669,7 +1685,7 @@ class WebScreenAdmin {
                     "name": "LVGL Typography",
                     "id": "lvgl95_typography",
                     "category": "utilities",
-                    "description": "Font sizes, wrapped text, RGB color bars, and switchable dark and light themes. Short press: dark / light.",
+                    "description": "Font sizes, wrapped text, RGB color bars, and switchable dark and light themes. Press Button: dark / light.",
                     "icon": "fa-font",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/lvgl95_typography",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/lvgl95_typography/script.js",
@@ -1682,7 +1698,7 @@ class WebScreenAdmin {
                     "name": "LVGL Motion Lines",
                     "id": "lvgl95_motion",
                     "category": "utilities",
-                    "description": "Two independent animated line traces and a moving marker. Short press: pause / resume.",
+                    "description": "Two independent animated line traces and a moving marker. Press Button: pause / resume.",
                     "icon": "fa-wave-square",
                     "github_url": "https://github.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/tree/main/examples/lvgl95_motion",
                     "main_file": "https://raw.githubusercontent.com/HW-Lab-Hardware-Design-Agency/WebScreen-Awesome/main/examples/lvgl95_motion/script.js",
