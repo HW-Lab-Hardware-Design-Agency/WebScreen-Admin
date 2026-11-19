@@ -840,6 +840,7 @@ class WebScreenAdmin {
 
         // App Health
         document.getElementById('checkErrorsBtn')?.addEventListener('click', () => this.checkErrors());
+        document.getElementById('powerBtn')?.addEventListener('click', () => this.toggleScreenSleep());
         document.getElementById('pressButtonBtn')?.addEventListener('click', () => this.pressAppButton());
         document.getElementById('runGCBtn')?.addEventListener('click', () => this.runGarbageCollection());
 
@@ -952,6 +953,7 @@ class WebScreenAdmin {
             btn.innerHTML = '<i aria-hidden="true" class="fas fa-plug-circle-xmark"></i> Disconnect';
             indicator.classList.add('connected');
             statusText.textContent = 'Connected';
+            this.updateSleepState(false, true);
             this.showToast('Connected to WebScreen', 'success');
 
             // Show connected message in terminal
@@ -962,6 +964,7 @@ class WebScreenAdmin {
             btn.innerHTML = '<i aria-hidden="true" class="fas fa-plug"></i> Connect Device';
             indicator.classList.remove('connected');
             statusText.textContent = 'Disconnected';
+            this.updateSleepState(false, false);
 
             // Reset SD card status when disconnected
             this.sdCardAvailable = false;
@@ -1336,6 +1339,41 @@ class WebScreenAdmin {
         a.href = canvas.toDataURL('image/png');
         a.download = `webscreen-${Date.now()}.png`;
         a.click();
+    }
+
+    // Header power button: screen standby. The device stays connected, so the
+    // same button wakes it; the status badge shows "Sleeping" meanwhile.
+    updateSleepState(sleeping, connected = !!this.serial?.connected) {
+        this.screenSleeping = sleeping;
+        const button = document.getElementById('powerBtn');
+        const label = document.getElementById('powerLabel');
+        const indicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        if (button) {
+            button.disabled = !connected;
+            button.setAttribute('aria-pressed', String(sleeping));
+            button.title = sleeping
+                ? 'Turn the screen back on.'
+                : 'Turn the screen off. The device stays connected.';
+        }
+        if (label) label.textContent = sleeping ? 'Screen on' : 'Screen off';
+        indicator?.classList.toggle('sleeping', sleeping);
+        if (statusText && connected) statusText.textContent = sleeping ? 'Sleeping' : 'Connected';
+    }
+
+    async toggleScreenSleep() {
+        if (!this.serial.connected) {
+            this.showToast('Please connect to a device first', 'warning');
+            return;
+        }
+
+        const sleeping = !this.screenSleeping;
+        try {
+            await this.serial.setScreenSleep(sleeping);
+            this.updateSleepState(sleeping);
+        } catch (error) {
+            this.showToast(error.message || 'Failed to change the screen state', 'error');
+        }
     }
 
     // App Health: send a button press to the running app (firmware /button)

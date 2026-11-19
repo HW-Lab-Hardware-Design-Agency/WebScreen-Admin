@@ -142,6 +142,21 @@ body {
     animation: pulse 2s infinite;
 }
 
+.status-indicator.sleeping i {
+    color: var(--warning-color);
+    animation: none;
+}
+
+.power-toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.power-toggle[aria-pressed="true"] {
+    border-color: var(--warning-color);
+    color: var(--warning-color);
+}
+
 /* Theme Toggle */
 .theme-toggle {
     display: flex;
