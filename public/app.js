@@ -1346,7 +1346,6 @@ class WebScreenAdmin {
     updateSleepState(sleeping, connected = !!this.serial?.connected) {
         this.screenSleeping = sleeping;
         const button = document.getElementById('powerBtn');
-        const label = document.getElementById('powerLabel');
         const indicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
         if (button) {
@@ -1355,8 +1354,8 @@ class WebScreenAdmin {
             button.title = sleeping
                 ? 'Turn the screen back on.'
                 : 'Turn the screen off. The device stays connected.';
+            button.setAttribute('aria-label', sleeping ? 'Turn the screen back on' : 'Turn the screen off');
         }
-        if (label) label.textContent = sleeping ? 'Screen on' : 'Screen off';
         indicator?.classList.toggle('sleeping', sleeping);
         if (statusText && connected) statusText.textContent = sleeping ? 'Sleeping' : 'Connected';
     }
