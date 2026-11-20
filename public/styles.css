@@ -2692,3 +2692,197 @@ button.app-card { font-family: inherit; color: inherit; }
     .connection-status { flex-wrap: wrap; gap: 12px; }
     .footer-social-links ul { flex-wrap: wrap; }
 }
+
+/* ==========================================================================
+   2026 refresh (default theme only; EVA is untouched).
+   Color and depth only, so the responsive rules above keep deciding layout:
+   quieter surfaces, borders instead of heavy shadows, and the brand color
+   kept for actions and status.
+   ========================================================================== */
+html:not([data-theme="eva"]) {
+    --bg-color: #f5f6f8;
+    --border-color: #e6e8ec;
+    --text-primary: #16181d;
+    --text-secondary: #5c6370;
+    --nav-hover-bg: #eef0f3;
+    --radius: 16px;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04);
+    --shadow-md: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.04);
+    --shadow-lg: 0 6px 16px rgba(16, 24, 40, 0.08);
+    --shadow-xl: 0 12px 28px rgba(16, 24, 40, 0.10);
+    --primary-soft: rgba(234, 56, 77, 0.09);
+    --transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    accent-color: var(--primary-color);
+    scrollbar-width: thin;
+    scrollbar-color: #c9cdd4 transparent;
+}
+
+/* Header: translucent, content scrolls under it */
+html:not([data-theme="eva"]) .header {
+    background: rgba(255, 255, 255, 0.78);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+    box-shadow: none;
+}
+
+html:not([data-theme="eva"]) .logo-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+html:not([data-theme="eva"]) .status-indicator {
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+}
+
+/* Titles: plain ink, tighter tracking */
+html:not([data-theme="eva"]) .section-title {
+    font-size: 1.75rem;
+    letter-spacing: -0.025em;
+    margin-bottom: 1.5rem;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--text-primary);
+}
+
+/* Sidebar: tinted active item instead of a solid block */
+html:not([data-theme="eva"]) .sidebar {
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    padding: 0.75rem;
+}
+
+html:not([data-theme="eva"]) button.nav-item.active {
+    background: var(--primary-soft);
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Cards: hairline border, almost no shadow, no hover lift (they are not links) */
+html:not([data-theme="eva"]) .card,
+html:not([data-theme="eva"]) .upload-area,
+html:not([data-theme="eva"]) .file-browser {
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+html:not([data-theme="eva"]) .card:hover {
+    box-shadow: var(--shadow-sm);
+}
+
+html:not([data-theme="eva"]) .card-header {
+    background: transparent;
+    padding: 1.1rem 1.5rem;
+}
+
+html:not([data-theme="eva"]) .card-header h3 {
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+}
+
+html:not([data-theme="eva"]) .info-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+}
+
+html:not([data-theme="eva"]) .info-value {
+    font-size: 0.9375rem;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+/* Buttons: steady on hover, tinted shadow on the primary one */
+html:not([data-theme="eva"]) .btn {
+    border-radius: 10px;
+}
+
+html:not([data-theme="eva"]) .btn:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+html:not([data-theme="eva"]) .btn-primary {
+    box-shadow: 0 1px 2px rgba(211, 16, 39, 0.25);
+}
+
+html:not([data-theme="eva"]) .btn-primary:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 12px rgba(211, 16, 39, 0.28);
+}
+
+html:not([data-theme="eva"]) .btn:active,
+html:not([data-theme="eva"]) .action-btn:active {
+    transform: scale(0.98);
+}
+
+/* Quick actions: colored icon at rest, soft tint on hover */
+html:not([data-theme="eva"]) .action-btn {
+    border-radius: 12px;
+    font-family: inherit;
+}
+
+html:not([data-theme="eva"]) .action-btn:not(:disabled) {
+    color: var(--text-primary);
+}
+
+html:not([data-theme="eva"]) .action-btn i {
+    font-size: 1.25rem;
+}
+
+html:not([data-theme="eva"]) .action-btn:not(:disabled) i {
+    color: var(--primary-color);
+}
+
+html:not([data-theme="eva"]) .action-btn:hover:not(:disabled) {
+    background: var(--primary-soft);
+    color: var(--text-primary);
+    border-color: rgba(234, 56, 77, 0.35);
+    transform: none;
+    box-shadow: none;
+}
+
+html:not([data-theme="eva"]) .action-btn:disabled {
+    cursor: not-allowed;
+}
+
+/* Marketplace: tinted icon tiles, calmer hover */
+html:not([data-theme="eva"]) .app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: rgba(234, 56, 77, 0.45);
+}
+
+html:not([data-theme="eva"]) .app-card-icon {
+    width: 64px;
+    height: 64px;
+    font-size: 1.6rem;
+    background: var(--primary-soft);
+    color: var(--primary-color);
+}
+
+html:not([data-theme="eva"]) .search-bar input {
+    border-radius: 12px;
+    font-family: inherit;
+    color: var(--text-primary);
+}
+
+/* Settings */
+html:not([data-theme="eva"]) .config-section {
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Toasts */
+html:not([data-theme="eva"]) .toast {
+    border-radius: 12px;
+    box-shadow: var(--shadow-xl);
+}
+
+/* Roomier quick-action rows on wide screens only; narrower layouts keep the rules above */
+@media (min-width: 1280px) {
+    html:not([data-theme="eva"]) .dashboard-grid .quick-actions {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
