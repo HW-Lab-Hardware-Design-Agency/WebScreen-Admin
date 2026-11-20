@@ -124,6 +124,9 @@
                         <i aria-hidden="true" class="fas fa-plug"></i>
                         Connect Device
                     </button>
+                    <button id="powerBtn" class="theme-toggle power-toggle" disabled aria-pressed="false" aria-label="Turn the screen off" title="Turn the screen off. The device stays connected.">
+                        <i aria-hidden="true" class="fas fa-power-off"></i>
+                    </button>
                     <button id="themeToggle" class="theme-toggle" title="Toggle theme">
                         <i aria-hidden="true" class="fas fa-sun"></i>
                         <span class="theme-label">Light</span>
@@ -322,6 +325,10 @@
                                     <button class="action-btn" id="checkErrorsBtn">
                                         <i aria-hidden="true" class="fas fa-stethoscope"></i>
                                         <span>Check Errors</span>
+                                    </button>
+                                    <button class="action-btn" id="pressButtonBtn" title="Send a button press to the running app (on_button). The physical button only powers the device off.">
+                                        <i aria-hidden="true" class="fas fa-hand-pointer"></i>
+                                        <span>Press Button</span>
                                     </button>
                                     <button class="action-btn" id="runGCBtn">
                                         <i aria-hidden="true" class="fas fa-broom"></i>

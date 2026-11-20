@@ -19,7 +19,7 @@ class WebScreenSerial {
         // Every public device operation owns the serial stream until it finishes.
         // Internal calls bypass the queue to avoid re-entering their own operation.
         const operations = ['getDeviceInfo', 'getStats', 'listFiles', 'uploadFile',
-            'deleteFile', 'readFile', 'loadApp', 'evalJs', 'getErrors', 'runGC',
+            'deleteFile', 'readFile', 'loadApp', 'evalJs', 'getErrors', 'runGC', 'pressButton', 'setScreenSleep',
             'getHelp', 'reboot', 'factoryReset', 'makeDirectory', 'downloadFileBase64',
             'takeScreenshot', 'backup', 'setConfig', 'getConfig', 'connectWiFi',
             'setBrightness', 'setOrientation', 'setTimeout', 'syncTime', 'writeConfiguration'];
@@ -741,6 +741,30 @@ class WebScreenSerial {
 
             schedule(finish, 3000);
         });
+    }
+
+    // Send one button press to the running JS app (firmware /button). The
+    // physical button only powers the device off, so this is how on_button()
+    // handlers are reached. Rejects with a user-facing message.
+    async pressButton() {
+        return this.request('/button', line => {
+            const response = line.replace(/^(?:WebScreen>\s*)+/, '');
+            if (response.includes('Unknown command')) throw new Error('This firmware has no /button command. Please update it.');
+            if (response.startsWith('[ERROR]')) throw new Error(response.slice(7).trim());
+            if (response.includes('Button press sent')) return { done: true, value: true };
+        }, 3000);
+    }
+
+    // Screen standby (firmware /sleep and /wake): the screen turns off but the
+    // device keeps running and stays connected, so it can be woken from here.
+    async setScreenSleep(sleeping) {
+        const command = sleeping ? '/sleep' : '/wake';
+        return this.request(command, line => {
+            const response = line.replace(/^(?:WebScreen>\s*)+/, '');
+            if (response.includes('Unknown command')) throw new Error(`This firmware has no ${command} command. Please update it.`);
+            if (response.startsWith('[ERROR]')) throw new Error(response.slice(7).trim());
+            if (response.includes(sleeping ? 'Screen sleeping' : 'Screen awake')) return { done: true, value: true };
+        }, 3000);
     }
 
     // Request a JS garbage collection (firmware /gc). Resolves with the

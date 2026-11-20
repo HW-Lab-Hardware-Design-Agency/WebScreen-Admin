@@ -61,8 +61,8 @@ All commands are slash-prefixed text sent over the serial line. Multi-line respo
 - Write text file (legacy): `/write <name>` then stream lines, then `END`
 - Upload (firmware 2.0.0+): `/upload <name>` (text) or `/upload <name> base64` (binary), stream chunks, then `END`; the firmware answers `[OK] File saved: ...` or `[ERROR] Upload failed: ...` — `uploadFile()` awaits that ACK (timeout = older firmware, treated as success)
 - Config: `/config get <key>`, `/config set <key> <value>`
-- Hardware: `/brightness <0-255>`, `/settime <epoch> [posix_tz]`
-- JS runtime: `/eval <js>` (live REPL into the running app, max 255 chars, replies as `[EVAL] ...` lines), `/errors` (JS error report ending with a `Script:` line), `/gc`, `/screenshot` (base64 RGB565_SWAP stream between `=== SCREENSHOT WxH RGB565_SWAP ===` / `=== SCREENSHOT END ===`; decoded to canvas in `captureScreenshot()`)
+- Hardware: `/sleep` / `/wake` (screen standby; the header power button toggles them and the status badge reads "Sleeping"), `/brightness <0-255>`, `/settime <epoch> [posix_tz]`
+- JS runtime: `/eval <js>` (live REPL into the running app, max 255 chars, replies as `[EVAL] ...` lines), `/errors` (JS error report ending with a `Script:` line), `/gc`, `/button` (one virtual press for the app's `on_button()`; the physical button only powers the device off — the App Health **Press Button** control sends it), `/screenshot` (base64 RGB565_SWAP stream between `=== SCREENSHOT WxH RGB565_SWAP ===` / `=== SCREENSHOT END ===`; decoded to canvas in `captureScreenshot()`)
 
 **Firmware version branching:** `WebScreenSerial.uploadFile()` checks the device firmware version (parsed from `/info`). 2.0.0+ uses `/upload`; older firmware falls back to `/write` line-by-line streaming for `.js` files only. Binary files always use base64 chunked transfer.
 
