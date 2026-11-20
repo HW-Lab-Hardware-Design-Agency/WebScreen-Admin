@@ -147,14 +147,34 @@ body {
     animation: none;
 }
 
-.power-toggle:disabled {
-    opacity: 0.5;
+.theme-toggle.power-toggle {
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 2px solid var(--primary-color);
+    border-radius: 50%;
+    color: var(--primary-color);
+}
+
+.theme-toggle.power-toggle i {
+    font-size: 1.15rem;
+}
+
+.theme-toggle.power-toggle:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: #fff;
+}
+
+.theme-toggle.power-toggle:disabled {
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
-.power-toggle[aria-pressed="true"] {
+.theme-toggle.power-toggle[aria-pressed="true"] {
+    background: var(--warning-color);
     border-color: var(--warning-color);
-    color: var(--warning-color);
+    color: #fff;
 }
 
 /* Theme Toggle */
