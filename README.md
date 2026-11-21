@@ -16,7 +16,7 @@ Connect your WebScreen by USB, close Arduino Serial Monitor/Plotter and other pr
 
 ## LVGL demo apps
 
-Search **Apps** for `LVGL` or `firmware 4.0` to find Arc Text, Chart Gallery, Gauge Dashboard, Typography, and Motion Lines. Each card and its details show **Requires firmware 4.0 (LVGL 9.5 compatible)**. Upgrade to the compatible firmware before running these demos. They run offline with no additional assets; **Press Button** in the dashboard's App Health card changes modes or pauses animation. It sends the firmware `/button` command to the app's `on_button()` handler and needs firmware with that command; the physical button only powers the device off.
+Search **Apps** for `LVGL` or `firmware 4.0` to find Arc Text, Chart Gallery, Gauge Dashboard, Typography, and Motion Lines. Each card and its details show **Requires firmware 4.0 (LVGL 9.5 compatible)**. Upgrade to the compatible firmware before running these demos. They run offline with no additional assets; a click of the device's **BOOT** button changes modes or pauses animation. **Press Button** in the dashboard's App Health card does the same from the computer: it sends the firmware `/button` command to the app's `on_button()` handler. Both need firmware with BOOT button and `/button` support; the power button only powers the device off.
 
 The catalog lives in `public/apps.json`, with an embedded fallback in `public/app.js`. Keep both copies in sync. Optional `min_firmware` and `lvgl_version` fields add the compatibility label; apps without these fields keep their existing display.
 
