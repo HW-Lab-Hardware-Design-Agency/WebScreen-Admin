@@ -743,9 +743,9 @@ class WebScreenSerial {
         });
     }
 
-    // Send one button press to the running JS app (firmware /button). The
-    // physical button only powers the device off, so this is how on_button()
-    // handlers are reached. Rejects with a user-facing message.
+    // Send one button press to the running JS app (firmware /button), the same
+    // event a click of the device's BOOT button produces. The power button only
+    // powers the device off. Rejects with a user-facing message.
     async pressButton() {
         return this.request('/button', line => {
             const response = line.replace(/^(?:WebScreen>\s*)+/, '');
